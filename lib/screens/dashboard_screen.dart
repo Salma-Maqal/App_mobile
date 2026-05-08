@@ -527,7 +527,7 @@ class _HistoryTab extends StatelessWidget {
 // ─────────────────────────────────────────
 // 👤 Profile Tab
 // ─────────────────────────────────────────
-class _ProfileTab extends StatelessWidget {
+class _ProfileTab extends StatefulWidget {
   final String userName;
   final String? userEmail;
   final Uint8List? profileImageBytes;
@@ -543,6 +543,37 @@ class _ProfileTab extends StatelessWidget {
   });
 
   @override
+  State<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<_ProfileTab> {
+  bool _isDiabetique = true; // loaded from Firestore
+  String _diabeteType = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDiabeteType();
+  }
+
+  Future<void> _loadDiabeteType() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _diabeteType = data['diabeteType'] ?? '';
+          // User is diabetique if diabeteType is set (not empty = diabetique patient)
+          _isDiabetique = _diabeteType.isNotEmpty;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
@@ -552,19 +583,19 @@ class _ProfileTab extends StatelessWidget {
             const SizedBox(height: 20),
             // ── Avatar ──
             GestureDetector(
-              onTap: onPickImage,
+              onTap: widget.onPickImage,
               child: Stack(
                 children: [
                   CircleAvatar(
                     radius: 55,
                     backgroundColor: AppColors.primary.withOpacity(0.15),
-                    backgroundImage: profileImageBytes != null
-                        ? MemoryImage(profileImageBytes!)
+                    backgroundImage: widget.profileImageBytes != null
+                        ? MemoryImage(widget.profileImageBytes!)
                         : null,
-                    child: profileImageBytes == null
+                    child: widget.profileImageBytes == null
                         ? Text(
-                            userName.isNotEmpty
-                                ? userName[0].toUpperCase()
+                            widget.userName.isNotEmpty
+                                ? widget.userName[0].toUpperCase()
                                 : 'U',
                             style: TextStyle(
                                 fontSize: 40,
@@ -591,34 +622,126 @@ class _ProfileTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text(userName,
+            Text(widget.userName,
                 style: const TextStyle(
                     fontSize: 22, fontWeight: FontWeight.bold)),
-            if (userEmail != null)
+            if (widget.userEmail != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(userEmail!,
+                child: Text(widget.userEmail!,
                     style: TextStyle(
                         color: AppColors.textGrey, fontSize: 14)),
               ),
+            if (_isDiabetique && _diabeteType.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(_diabeteType,
+                      style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+
+            // ── Ajouter Accompagnant (uniquement pour les diabétiques) ──
+            if (_isDiabetique)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.c2, AppColors.c1],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.c3),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.people_outline_rounded,
+                              color: AppColors.primary, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Accompagnant',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                      color: AppColors.textDark)),
+                              Text('Invitez quelqu\'un à vous suivre',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textGrey)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/add-companion'),
+                        icon: const Icon(Icons.person_add_alt_1_rounded,
+                            size: 18),
+                        label: const Text('Ajouter un accompagnant'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 8),
 
             // ── Menu items ──
             _ProfileMenuItem(
               icon: Icons.person_outline_rounded,
               label: 'Mon profil',
-              onTap: () {},
+              onTap: () => Navigator.pushNamed(context, '/profile'),
             ),
             _ProfileMenuItem(
               icon: Icons.notifications_outlined,
               label: 'Notifications',
-              onTap: () {},
+              onTap: () => Navigator.pushNamed(context, '/notifications'),
             ),
             _ProfileMenuItem(
               icon: Icons.lock_outline_rounded,
               label: 'Sécurité',
-              onTap: () {},
+              onTap: () => Navigator.pushNamed(context, '/securite'),
             ),
             _ProfileMenuItem(
               icon: Icons.help_outline_rounded,
@@ -632,7 +755,7 @@ class _ProfileTab extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: onSignOut,
+                onPressed: widget.onSignOut,
                 icon: const Icon(Icons.logout_rounded, color: Colors.red),
                 label: const Text('Déconnexion',
                     style: TextStyle(color: Colors.red)),

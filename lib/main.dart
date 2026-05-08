@@ -13,6 +13,9 @@ import 'screens/verify_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/add_meal_screen.dart';
 import 'screens/nutrition_screen.dart'; // ✅ NOUVEAU
+import 'screens/Mon_Profil_screen.dart';
+import 'screens/Nutification_screen.dart';
+import 'screens/securite_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -56,6 +59,9 @@ class CalmSugarApp extends StatelessWidget {
         '/forgot-password': (_) => const ForgotPasswordScreen(),
         '/add-meal':        (_) => const AddMealScreen(),
         '/nutrition':       (_) => const NutritionScreen(), // ✅ NOUVEAU
+        '/profile':         (_) => const MonProfilScreen(),
+        '/notifications':   (_) => const NotificationsScreen(),
+        '/securite':        (_) => const SecuriteScreen(),
       },
     );
   }
