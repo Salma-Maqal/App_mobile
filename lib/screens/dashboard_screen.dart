@@ -4,1141 +4,845 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:image_picker/image_picker.dart';
-import '../app_colors.dart';
-import '../user_session.dart';
-import '../meal_store.dart';
-import 'edit_meal_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../app_colors.dart';
+import 'add_meal_screen.dart';
+import 'nutrition_screen.dart';
+
+// ─────────────────────────────────────────
+// Dashboard Screen
+// ─────────────────────────────────────────
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
+  final _navKey = GlobalKey<CurvedNavigationBarState>();
 
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      const _HomePage(),
-      const _GlycemiePage(),
-      const _RepasPage(),
-      _ProfilPage(onRefresh: () => setState(() {})),
-    ];
+  // ── user info ──
+  String _userName = 'Utilisateur';
+  String? _userEmail;
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      extendBody: true,
-      appBar: AppBar(
-        backgroundColor: AppColors.c6,
-        elevation: 0,
-        title: const Text('CalmSugar',
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontStyle: FontStyle.italic,
-                fontSize: 22,
-                letterSpacing: 0.5)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white, size: 26),
-            onPressed: () async {
-              await UserSession().clear();
-              if (mounted) Navigator.pushReplacementNamed(context, '/welcome');
-            },
-          ),
-        ],
-      ),
-      body: pages[_currentIndex],
-      bottomNavigationBar: CurvedNavigationBar(
-        index: _currentIndex,
-        height: 70,
-        color: AppColors.c6,
-        backgroundColor: Colors.transparent,
-        buttonBackgroundColor: AppColors.c5,
-        animationDuration: const Duration(milliseconds: 300),
-        animationCurve: Curves.easeInOut,
-        items: const [
-          Icon(Icons.home_rounded,         size: 32, color: Colors.white),
-          Icon(Icons.monitor_heart_rounded, size: 32, color: Colors.white),
-          Icon(Icons.restaurant_rounded,    size: 32, color: Colors.white),
-          Icon(Icons.person_rounded,        size: 32, color: Colors.white),
-        ],
-        onTap: (i) => setState(() => _currentIndex = i),
-      ),
-    );
-  }
-}
+  // ── meal summary ──
+  int _totalCaloriesToday = 0;
+  int _totalSugarToday = 0;
+  int _mealsCountToday = 0;
+  bool _loadingStats = true;
 
-// ══════════════════════════════════════════
-// PAGE 1 : Accueil
-// ══════════════════════════════════════════
-class _HomePage extends StatelessWidget {
-  const _HomePage();
-  @override
-  Widget build(BuildContext context) {
-    final name = UserSession().fullName.isNotEmpty ? UserSession().fullName : 'Utilisateur';
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-        // ── Hero card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.c6,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: AppColors.c6.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6))],
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Bonjour, $name 👋',
-                style: const TextStyle(color: Colors.white70, fontSize: 16)),
-            const SizedBox(height: 6),
-            const Text('Bienvenue sur CalmSugar',
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 18),
-            Row(children: [
-              _StatCard(label: 'Glycémie',     value: '5.4', unit: 'mmol/L', color: AppColors.c3),
-              const SizedBox(width: 12),
-              _StatCard(label: 'Dernier repas', value: '2h',  unit: 'ago',    color: AppColors.c4),
-            ]),
-          ]),
-        ),
-
-        const SizedBox(height: 30),
-        const Text('Actions rapides',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-        const SizedBox(height: 14),
-
-        _ActionCard(
-          icon: Icons.person_add_outlined,
-          title: 'Ajouter un accompagnant',
-          subtitle: 'Inviter un proche à vous suivre',
-          onTap: () => Navigator.pushNamed(context, '/add-companion')),
-        const SizedBox(height: 12),
-        _ActionCard(
-          icon: Icons.monitor_heart_outlined,
-          title: 'Saisir ma glycémie',
-          subtitle: 'Enregistrer une nouvelle mesure',
-          onTap: () {}),
-        const SizedBox(height: 12),
-        _ActionCard(
-          icon: Icons.restaurant_outlined,
-          title: 'Journal alimentaire',
-          subtitle: 'Suivre vos repas',
-          onTap: () {}),
-        const SizedBox(height: 12),
-        _ActionCard(
-          icon: Icons.bar_chart_outlined,
-          title: 'Mes statistiques',
-          subtitle: "Voir l'évolution de ma santé",
-          onTap: () {}),
-      ]),
-    );
-  }
-}
-
-// ══════════════════════════════════════════
-// PAGE 2 : Glycémie
-// ══════════════════════════════════════════
-class _GlycemiePage extends StatelessWidget {
-  const _GlycemiePage();
-  @override
-  Widget build(BuildContext context) {
-    final entries = [
-      {'time': '08:00', 'value': 5.4, 'status': 'Normal'},
-      {'time': '12:30', 'value': 7.8, 'status': 'Élevé'},
-      {'time': '15:00', 'value': 4.9, 'status': 'Normal'},
-      {'time': '19:00', 'value': 6.2, 'status': 'Normal'},
-    ];
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-        // ── Header card
-        Container(
-          width: double.infinity, padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [AppColors.c5, AppColors.c6]),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: AppColors.c6.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6))],
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text("Glycémie aujourd'hui",
-                style: TextStyle(color: Colors.white70, fontSize: 15)),
-            const SizedBox(height: 8),
-            const Text('5.4 mmol/L',
-                style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Text('✅ Dans la plage normale',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-            ),
-          ]),
-        ),
-
-        const SizedBox(height: 28),
-        const Text('Historique du jour',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-        const SizedBox(height: 14),
-
-        ...entries.map((e) {
-          final isHigh = (e['value'] as double) > 7.0;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isHigh ? Colors.orange.shade200 : AppColors.c3, width: 1.5),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
-            ),
-            child: Row(children: [
-              Container(
-                width: 52, height: 52,
-                decoration: BoxDecoration(
-                  color: isHigh ? Colors.orange.shade50 : AppColors.c2,
-                  borderRadius: BorderRadius.circular(14)),
-                child: Icon(Icons.water_drop_rounded,
-                    color: isHigh ? Colors.orange : AppColors.c6, size: 26)),
-              const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(e['time'] as String,
-                    style: const TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 4),
-                Text('${e['value']} mmol/L',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-              ])),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isHigh ? Colors.orange.shade100 : AppColors.c2,
-                  borderRadius: BorderRadius.circular(20)),
-                child: Text(e['status'] as String,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isHigh ? Colors.orange.shade800 : AppColors.c6)),
-              ),
-            ]),
-          );
-        }),
-
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.c6,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 3),
-            onPressed: () {},
-            icon: const Icon(Icons.add_rounded, size: 24),
-            label: const Text('Nouvelle mesure',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          )),
-      ]),
-    );
-  }
-}
-
-// ══════════════════════════════════════════
-// PAGE 3 : Repas + Calendrier
-// ══════════════════════════════════════════
-class _RepasPage extends StatefulWidget {
-  const _RepasPage();
-  @override
-  State<_RepasPage> createState() => _RepasPageState();
-}
-
-class _RepasPageState extends State<_RepasPage> {
-  final _store = MealStore.instance;
-  late DateTime _selectedDay;
-  late DateTime _focusedMonth;
-  late ScrollController _calScroll;
-
-  static const int _daysRange = 30; // 30 jours dans le calendrier
+  // ── profile photo ──
+  Uint8List? _profileImageBytes;
 
   @override
   void initState() {
     super.initState();
-    _selectedDay   = _today;
-    _focusedMonth  = _today;
-    _calScroll     = ScrollController();
-    // scroll vers aujourd'hui après le build
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToToday());
+    _loadUserData();
+    _loadTodayStats();
   }
 
-  @override
-  void dispose() {
-    _calScroll.dispose();
-    super.dispose();
+  // ────────────────────────────────────────
+  // Load user info from Firestore
+  // ────────────────────────────────────────
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() {
+      _userEmail = user.email;
+      _userName = user.displayName ?? user.email?.split('@').first ?? 'Utilisateur';
+    });
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _userName = data['name'] ?? _userName;
+        });
+      }
+    } catch (_) {}
   }
 
-  DateTime get _today {
-    final n = DateTime.now();
-    return DateTime(n.year, n.month, n.day);
-  }
+  // ────────────────────────────────────────
+  // Load today's meal stats from Firestore
+  // ────────────────────────────────────────
+  Future<void> _loadTodayStats() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => _loadingStats = false);
+      return;
+    }
 
-  void _scrollToToday() {
-    final idx = _daysRange ~/ 2; // aujourd'hui est au milieu
-    final offset = idx * 72.0 - 100;
-    if (_calScroll.hasClients) {
-      _calScroll.animateTo(offset.clamp(0, double.infinity),
-          duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('meals')
+          .where('userId', isEqualTo: user.uid)
+          .where('timestamp',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('timestamp', isLessThan: Timestamp.fromDate(endOfDay))
+          .get();
+
+      int totalCal = 0;
+      int totalSugar = 0;
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        totalCal += (data['calories'] as num?)?.toInt() ?? 0;
+        totalSugar += (data['sugar'] as num?)?.toInt() ?? 0;
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalCaloriesToday = totalCal;
+          _totalSugarToday = totalSugar;
+          _mealsCountToday = snapshot.docs.length;
+          _loadingStats = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingStats = false);
     }
   }
 
-  Future<void> _goAddMeal() async {
-    final added = await Navigator.pushNamed(context, '/add-meal');
-    if (added == true && mounted) setState(() {});
+  // ────────────────────────────────────────
+  // Pick profile photo
+  // ────────────────────────────────────────
+  Future<void> _pickProfileImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 60,
+      maxWidth: 300,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() => _profileImageBytes = bytes);
   }
 
-  String _dayName(DateTime d) {
-    const names = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    return names[d.weekday - 1];
+  // ────────────────────────────────────────
+  // Sign out
+  // ────────────────────────────────────────
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Déconnexion'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Déconnecter',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
-  String _monthLabel(DateTime d) {
-    const months = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
-    return '${months[d.month - 1]} ${d.year}';
+  // ────────────────────────────────────────
+  // Navigate to Add Meal
+  // ────────────────────────────────────────
+  Future<void> _goToAddMeal() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddMealScreen()),
+    );
+    _loadTodayStats(); // refresh stats after adding meal
   }
+
+  // ────────────────────────────────────────
+  // Pages
+  // ────────────────────────────────────────
+  late final List<Widget> _pages = [
+    _HomeTab(
+      userName: _userName,
+      totalCalories: _totalCaloriesToday,
+      totalSugar: _totalSugarToday,
+      mealsCount: _mealsCountToday,
+      loading: _loadingStats,
+      onAddMeal: _goToAddMeal,
+      onGoNutrition: () => _navKey.currentState?.setPage(1),
+    ),
+    const NutritionScreen(),
+    _HistoryTab(),
+    _ProfileTab(
+      userName: _userName,
+      userEmail: _userEmail,
+      profileImageBytes: _profileImageBytes,
+      onPickImage: _pickProfileImage,
+      onSignOut: _signOut,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final selKey  = MealStore.keyOf(_selectedDay);
-    final meals   = _store.forDate(selKey);
-    final cal     = _store.caloriesForDate(selKey);
-    const objectif = 1800;
-    final restantes = (objectif - cal).clamp(0, objectif);
-    final isToday   = _selectedDay == _today;
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
+      bottomNavigationBar: CurvedNavigationBar(
+        key: _navKey,
+        index: _currentIndex,
+        height: 60,
+        color: AppColors.primary,
+        backgroundColor: AppColors.bg,
+        buttonBackgroundColor: AppColors.darkMoss,
+        animationDuration: const Duration(milliseconds: 300),
+        items: const [
+          Icon(Icons.home_rounded, size: 28, color: Colors.white),
+          Icon(Icons.restaurant_menu_rounded, size: 28, color: Colors.white),
+          Icon(Icons.history_rounded, size: 28, color: Colors.white),
+          Icon(Icons.person_rounded, size: 28, color: Colors.white),
+        ],
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
+    );
+  }
+}
 
-    return Column(children: [
-      // ════════════════════════════
-      // CALENDRIER HORIZONTAL
-      // ════════════════════════════
-      Container(
-        color: AppColors.c6,
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Column(children: [
-          // Mois label
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(_monthLabel(_selectedDay),
-                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-              if (!isToday)
-                GestureDetector(
-                  onTap: () => setState(() { _selectedDay = _today; _scrollToToday(); }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: const Text("Aujourd'hui",
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+// ─────────────────────────────────────────
+// 🏠 Home Tab
+// ─────────────────────────────────────────
+class _HomeTab extends StatelessWidget {
+  final String userName;
+  final int totalCalories;
+  final int totalSugar;
+  final int mealsCount;
+  final bool loading;
+  final VoidCallback onAddMeal;
+  final VoidCallback onGoNutrition;
+
+  const _HomeTab({
+    required this.userName,
+    required this.totalCalories,
+    required this.totalSugar,
+    required this.mealsCount,
+    required this.loading,
+    required this.onAddMeal,
+    required this.onGoNutrition,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bonjour 👋',
+                        style: TextStyle(
+                            fontSize: 14, color: AppColors.textGrey)),
+                    Text(userName,
+                        style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: AppColors.primary.withOpacity(0.15),
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20),
                   ),
                 ),
-            ]),
-          ),
-          // Jours scrollables
-          SizedBox(
-            height: 80,
-            child: ListView.builder(
-              controller: _calScroll,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _daysRange,
-              itemBuilder: (_, i) {
-                final day = _today.subtract(Duration(days: _daysRange ~/ 2 - i));
-                final key = MealStore.keyOf(day);
-                final hasMeals = _store.forDate(key).isNotEmpty;
-                final isSelected = day == _selectedDay;
-                final isTodayDay = day == _today;
-
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedDay = day),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 60,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isTodayDay && !isSelected
-                            ? Colors.white.withOpacity(0.6)
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Text(_dayName(day),
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected ? AppColors.c6 : Colors.white70)),
-                      const SizedBox(height: 4),
-                      Text('${day.day}',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: isSelected ? AppColors.c6 : Colors.white)),
-                      const SizedBox(height: 4),
-                      // Point si repas enregistrés
-                      Container(
-                        width: 6, height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: hasMeals
-                              ? (isSelected ? AppColors.c5 : Colors.white)
-                              : Colors.transparent,
-                        ),
-                      ),
-                    ]),
-                  ),
-                );
-              },
-            ),
-          ),
-        ]),
-      ),
-
-      // ════════════════════════════
-      // CONTENU DU JOUR SÉLECTIONNÉ
-      // ════════════════════════════
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-            // Résumé calories du jour
-            Container(
-              width: double.infinity, padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                  color: AppColors.c6,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [BoxShadow(color: AppColors.c6.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))]),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                _CalInfo(label: 'Consommées', value: '$cal',       unit: 'kcal'),
-                Container(width: 1, height: 44, color: Colors.white30),
-                _CalInfo(label: 'Objectif',   value: '$objectif',  unit: 'kcal'),
-                Container(width: 1, height: 44, color: Colors.white30),
-                _CalInfo(label: 'Restantes',  value: '$restantes', unit: 'kcal'),
-              ]),
+              ],
             ),
 
             const SizedBox(height: 24),
 
-            // Titre du jour
-            Row(children: [
-              Text(
-                isToday ? "🍽️ Aujourd'hui" : '🍽️ ${_dayLabel(_selectedDay)}',
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textDark),
-              ),
-              const SizedBox(width: 10),
-              if (meals.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(20)),
-                  child: Text('${meals.length} repas',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-                ),
-            ]),
-
-            const SizedBox(height: 14),
-
-            // Liste repas ou état vide
-            if (meals.isEmpty)
-              _EmptyMeals(isToday: isToday)
-            else
-              ...meals.map((m) => _MealCard(meal: m, onRefresh: () => setState(() {}))),
-
-            const SizedBox(height: 20),
-
-            // ── Section Eau
-            const Text('💧 Hydratation',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+            // ── Stats Today ──
+            Text('Aujourd\'hui',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark)),
             const SizedBox(height: 12),
-            _WaterSection(dateKey: selKey),
 
-            const SizedBox(height: 16),
+            loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                          child: _StatCard(
+                        icon: Icons.local_fire_department_rounded,
+                        label: 'Calories',
+                        value: '$totalCalories',
+                        unit: 'kcal',
+                        color: Colors.deepOrange,
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: _StatCard(
+                        icon: Icons.water_drop_rounded,
+                        label: 'Sucre',
+                        value: '$totalSugar',
+                        unit: 'g',
+                        color: Colors.blue,
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: _StatCard(
+                        icon: Icons.restaurant_rounded,
+                        label: 'Repas',
+                        value: '$mealsCount',
+                        unit: '',
+                        color: Colors.green,
+                      )),
+                    ],
+                  ),
 
-            // Bouton ajouter (seulement pour aujourd'hui)
-            if (isToday)
-              SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.c6,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 3),
-                  onPressed: _goAddMeal,
-                  icon: const Icon(Icons.add_rounded, size: 24),
-                  label: const Text('Ajouter un repas',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                )),
-          ]),
+            const SizedBox(height: 28),
+
+            // ── Sugar warning ──
+            if (!loading && totalSugar > 50)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.red.shade600),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Attention : votre consommation de sucre dépasse 50g aujourd\'hui.',
+                        style: TextStyle(
+                            color: Colors.red.shade700, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Quick Actions ──
+            Text('Actions rapides',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.add_circle_rounded,
+                    label: 'Ajouter repas',
+                    color: AppColors.primary,
+                    onTap: onAddMeal,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'Scanner produit',
+                    color: Colors.teal,
+                    onTap: onGoNutrition,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Tips ──
+            _TipBanner(),
+          ],
         ),
       ),
-    ]);
-  }
-
-  String _dayLabel(DateTime d) {
-    const months = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
+    );
   }
 }
 
-class _MealCard extends StatelessWidget {
-  final MealEntry meal;
-  final VoidCallback onRefresh;
-  const _MealCard({required this.meal, required this.onRefresh});
-
+// ─────────────────────────────────────────
+// 📊 History Tab
+// ─────────────────────────────────────────
+class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Dismissible(
-      key: ValueKey(meal.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-            color: Colors.red.shade400, borderRadius: BorderRadius.circular(16)),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.delete_rounded, color: Colors.white, size: 28),
-          SizedBox(height: 4),
-          Text('Supprimer', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-        ]),
-      ),
-      confirmDismiss: (_) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            title: const Text('Supprimer ce repas ?',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-            content: Text('${meal.platEmoji} ${meal.platName} — ${meal.type}',
-                style: const TextStyle(fontSize: 15, color: AppColors.textGrey)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Annuler',
-                    style: TextStyle(color: AppColors.c5, fontWeight: FontWeight.w700))),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red, foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700))),
-            ],
-          ),
-        ) ?? false;
-      },
-      onDismissed: (_) async {
-        await MealStore.instance.delete(meal.id);
-        onRefresh();
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.c3, width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Column(children: [
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('Non connecté'));
+    }
+
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-            child: Row(children: [
-              Container(width: 52, height: 52,
-                  decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(14)),
-                  child: Center(child: Text(meal.platEmoji, style: const TextStyle(fontSize: 26)))),
-              const SizedBox(width: 14),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(meal.type,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                const SizedBox(height: 3),
-                Row(children: [
-                  Text(meal.timeLabel,
-                      style: const TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w500)),
-                  const SizedBox(width: 6),
-                  Container(width: 4, height: 4,
-                      decoration: const BoxDecoration(color: AppColors.c3, shape: BoxShape.circle)),
-                  const SizedBox(width: 6),
-                  Flexible(child: Text(meal.platName,
-                      style: const TextStyle(fontSize: 13, color: AppColors.textGrey, fontStyle: FontStyle.italic),
-                      overflow: TextOverflow.ellipsis)),
-                ]),
-                const SizedBox(height: 5),
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(20)),
-                    child: Text('🍚 ${meal.glucides.toStringAsFixed(1)} g glucides',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('${meal.calories} kcal',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.c6)),
-                ]),
-              ])),
-            ]),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Text('Historique des repas',
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold)),
           ),
-          // Actions bar
-          Container(
-            decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.c2, width: 1))),
-            child: Row(children: [
-              // ✏️ Modifier
-              Expanded(child: TextButton.icon(
-                onPressed: () async {
-                  final edited = await Navigator.push<bool>(context,
-                      MaterialPageRoute(builder: (_) => EditMealScreen(meal: meal)));
-                  if (edited == true) onRefresh();
-                },
-                icon: const Icon(Icons.edit_rounded, size: 16, color: AppColors.c5),
-                label: const Text('Modifier',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.c5)),
-              )),
-              Container(width: 1, height: 36, color: AppColors.c2),
-              // 🗑️ Supprimer
-              Expanded(child: TextButton.icon(
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      title: const Text('Supprimer ce repas ?',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                      content: Text('${meal.platEmoji} ${meal.platName}',
-                          style: const TextStyle(fontSize: 15, color: AppColors.textGrey)),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Annuler',
-                                style: TextStyle(color: AppColors.c5, fontWeight: FontWeight.w700))),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red, foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700))),
+          const SizedBox(height: 8),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('meals')
+                  .where('userId', isEqualTo: user.uid)
+                  .orderBy('timestamp', descending: true)
+                  .limit(50)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.restaurant_menu_outlined,
+                            size: 60, color: Colors.grey),
+                        SizedBox(height: 12),
+                        Text('Aucun repas enregistré',
+                            style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   );
-                  if (confirm == true) {
-                    await MealStore.instance.delete(meal.id);
-                    onRefresh();
-                  }
-                },
-                icon: const Icon(Icons.delete_rounded, size: 16, color: Colors.red),
-                label: const Text('Supprimer',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.red)),
-              )),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
+                }
 
-// ── Water Card pour la page Repas
-class _WaterSection extends StatefulWidget {
-  final String dateKey;
-  const _WaterSection({required this.dateKey});
-  @override
-  State<_WaterSection> createState() => _WaterSectionState();
-}
-class _WaterSectionState extends State<_WaterSection> {
-  static const int _max = 8;
+                final docs = snapshot.data!.docs;
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final ts = (data['timestamp'] as Timestamp?)?.toDate();
+                    final dateStr = ts != null
+                        ? '${ts.day}/${ts.month}/${ts.year} ${ts.hour}:${ts.minute.toString().padLeft(2, '0')}'
+                        : '';
 
-  int get _glasses => MealStore.instance.glassesForDate(widget.dateKey);
-
-  @override
-  Widget build(BuildContext context) {
-    final glasses = _glasses;
-    final ml  = glasses * 250;
-    final pct = glasses / _max;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBBDEFB), width: 1.5),
-        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(width: 46, height: 46,
-              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.water_drop_rounded, color: Color(0xFF1565C0), size: 24)),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Eau', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-            Text('$glasses/$_max verres — $ml ml',
-                style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
-          ])),
-          Text(
-            glasses >= _max ? '🎉 Objectif!' : '${_max - glasses} restants',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                color: glasses >= _max ? AppColors.c5 : AppColors.textGrey),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        ClipRRect(borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(value: pct, minHeight: 8,
-              backgroundColor: const Color(0xFFE3F2FD),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)))),
-        const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(_max, (i) {
-            final filled = i < glasses;
-            return GestureDetector(
-              onTap: () async {
-                final newVal = (i + 1 == glasses) ? 0 : i + 1;
-                await MealStore.instance.setWater(widget.dateKey, newVal);
-                setState(() {});
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2))
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.restaurant_rounded,
+                                color: AppColors.primary),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['name'] ?? 'Repas',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Text(dateStr,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textGrey)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('${data['calories'] ?? 0} kcal',
+                                  style: TextStyle(
+                                      color: Colors.deepOrange,
+                                      fontWeight: FontWeight.bold)),
+                              Text('${data['sugar'] ?? 0}g sucre',
+                                  style: TextStyle(
+                                      color: Colors.blue, fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
               },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 34, height: 40,
-                decoration: BoxDecoration(
-                  color: filled ? const Color(0xFFBBDEFB) : const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: filled ? const Color(0xFF1976D2) : AppColors.c3, width: 1.5),
-                ),
-                child: Center(child: Text('💧', style: TextStyle(fontSize: filled ? 17 : 13))),
-              ),
-            );
-          }),
-        ),
-      ]),
-    );
-  }
-}
-
-class _EmptyMeals extends StatelessWidget {
-  final bool isToday;
-  const _EmptyMeals({this.isToday = false});
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 48),
-    child: Column(children: [
-      Text(isToday ? '🍽️' : '📭', style: const TextStyle(fontSize: 52)),
-      const SizedBox(height: 14),
-      Text(
-        isToday ? 'Aucun repas enregistré aujourd\'hui' : 'Aucun repas ce jour-là',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-      const SizedBox(height: 6),
-      Text(
-        isToday ? "Appuyez sur 'Ajouter un repas'" : 'Sélectionnez un autre jour',
-        style: const TextStyle(fontSize: 14, color: AppColors.textGrey)),
-    ]),
-  );
-}
-
-class _CalInfo extends StatelessWidget {
-  final String label, value, unit;
-  const _CalInfo({required this.label, required this.value, required this.unit});
-  @override
-  Widget build(BuildContext context) => Column(children: [
-    Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-    const SizedBox(height: 6),
-    Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-    Text(unit,  style: const TextStyle(color: Colors.white60, fontSize: 11)),
-  ]);
-}
-
-// ══════════════════════════════════════════
-// PAGE 4 : Profil
-// ══════════════════════════════════════════
-class _ProfilPage extends StatefulWidget {
-  final VoidCallback onRefresh;
-  const _ProfilPage({required this.onRefresh});
-  @override
-  State<_ProfilPage> createState() => _ProfilPageState();
-}
-
-class _ProfilPageState extends State<_ProfilPage> {
-  final _session = UserSession();
-  bool _pickingImage = false;
-  XFile? _pickedFile;
-
-  Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12, bottom: 16),
-              decoration: BoxDecoration(color: AppColors.c3, borderRadius: BorderRadius.circular(2))),
-          const Text('Photo de profil',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-          const SizedBox(height: 16),
-          if (!kIsWeb) _PhotoOption(
-              icon: Icons.camera_alt_rounded, label: 'Prendre une photo',
-              onTap: () => Navigator.pop(context, ImageSource.camera)),
-          if (!kIsWeb) const Divider(height: 1, color: AppColors.c2),
-          _PhotoOption(
-              icon: Icons.photo_library_rounded, label: 'Choisir depuis la galerie',
-              onTap: () => Navigator.pop(context, ImageSource.gallery)),
-          if (_pickedFile != null) ...[
-            const Divider(height: 1, color: AppColors.c2),
-            _PhotoOption(icon: Icons.delete_outline_rounded, label: 'Supprimer la photo',
-                color: Colors.red, onTap: () => Navigator.pop(context, null)),
-          ],
-          const SizedBox(height: 16),
-        ]),
+            ),
+          ),
+        ],
       ),
     );
-
-    if (!mounted) return;
-    if (source == null && _pickedFile != null) {
-      setState(() => _pickedFile = null);
-      await _session.save(photoPath: '');
-      widget.onRefresh();
-      return;
-    }
-    if (source == null) return;
-
-    setState(() => _pickingImage = true);
-    try {
-      final picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 600);
-      if (picked != null && mounted) {
-        setState(() => _pickedFile = picked);
-        await _session.save(photoPath: picked.path);
-        widget.onRefresh();
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _pickingImage = false);
   }
+}
+
+// ─────────────────────────────────────────
+// 👤 Profile Tab
+// ─────────────────────────────────────────
+class _ProfileTab extends StatelessWidget {
+  final String userName;
+  final String? userEmail;
+  final Uint8List? profileImageBytes;
+  final VoidCallback onPickImage;
+  final VoidCallback onSignOut;
+
+  const _ProfileTab({
+    required this.userName,
+    required this.userEmail,
+    required this.profileImageBytes,
+    required this.onPickImage,
+    required this.onSignOut,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final name  = _session.fullName.isNotEmpty ? _session.fullName : 'Utilisateur';
-    final email = _session.email.isNotEmpty ? _session.email : 'email@exemple.com';
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-      child: Column(children: [
-
-        // ── Hero card
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                colors: [AppColors.c6, AppColors.c5],
-                begin: Alignment.topLeft, end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [BoxShadow(color: AppColors.c6.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 8))],
-          ),
-          child: Column(children: [
-            const SizedBox(height: 32),
-            Stack(alignment: Alignment.bottomRight, children: [
-              Container(
-                width: 110, height: 110,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  color: AppColors.c4,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12)],
-                ),
-                child: ClipOval(
-                  child: _pickedFile != null
-                      ? _XFileImage(file: _pickedFile!, size: 110)
-                      : _AvatarInitials(name: name),
-                ),
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            // ── Avatar ──
+            GestureDetector(
+              onTap: onPickImage,
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 55,
+                    backgroundColor: AppColors.primary.withOpacity(0.15),
+                    backgroundImage: profileImageBytes != null
+                        ? MemoryImage(profileImageBytes!)
+                        : null,
+                    child: profileImageBytes == null
+                        ? Text(
+                            userName.isNotEmpty
+                                ? userName[0].toUpperCase()
+                                : 'U',
+                            style: TextStyle(
+                                fontSize: 40,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold),
+                          )
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.camera_alt,
+                          size: 14, color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
-              GestureDetector(
-                onTap: _pickingImage ? null : _pickPhoto,
-                child: Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)]),
-                  child: _pickingImage
-                      ? const Padding(padding: EdgeInsets.all(7),
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.c6))
-                      : const Icon(Icons.camera_alt_rounded, size: 19, color: AppColors.c6),
-                ),
-              ),
-            ]),
+            ),
             const SizedBox(height: 16),
-            Text(name,
-                style: const TextStyle(color: Colors.white, fontSize: 22,
-                    fontWeight: FontWeight.w800, letterSpacing: 0.3)),
-            const SizedBox(height: 5),
-            Text(email, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.verified_rounded, color: Colors.white, size: 16),
-                SizedBox(width: 6),
-                Text('Type 2 — Suivi actif',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-              ]),
+            Text(userName,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold)),
+            if (userEmail != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(userEmail!,
+                    style: TextStyle(
+                        color: AppColors.textGrey, fontSize: 14)),
+              ),
+
+            const SizedBox(height: 32),
+
+            // ── Menu items ──
+            _ProfileMenuItem(
+              icon: Icons.person_outline_rounded,
+              label: 'Mon profil',
+              onTap: () {},
             ),
-            const SizedBox(height: 22),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
-              child: Row(children: [
-                _ProfileStat(value: '12', label: 'Semaines'),
-                _HDivider(),
-                _ProfileStat(value: '84', label: 'Mesures'),
-                _HDivider(),
-                _ProfileStat(value: '5.4', label: 'Moy. mmol'),
-              ]),
+            _ProfileMenuItem(
+              icon: Icons.notifications_outlined,
+              label: 'Notifications',
+              onTap: () {},
             ),
-            const SizedBox(height: 22),
-          ]),
-        ),
+            _ProfileMenuItem(
+              icon: Icons.lock_outline_rounded,
+              label: 'Sécurité',
+              onTap: () {},
+            ),
+            _ProfileMenuItem(
+              icon: Icons.help_outline_rounded,
+              label: 'Aide',
+              onTap: () {},
+            ),
 
-        const SizedBox(height: 28),
-        _SectionTitle(label: 'MON COMPTE'),
-        const SizedBox(height: 12),
-        _ProfilItem(icon: Icons.person_outline_rounded, title: 'Informations personnelles',
-            subtitle: name, onTap: () {}),
-        _ProfilItem(icon: Icons.monitor_heart_outlined, title: 'Paramètres de santé',
-            subtitle: 'Type, poids, glycémie cible',
-            onTap: () => Navigator.pushNamed(context, '/health-info')),
-        _ProfilItem(icon: Icons.group_outlined, title: 'Mes accompagnants',
-            subtitle: 'Gérer vos proches',
-            onTap: () => Navigator.pushNamed(context, '/add-companion')),
+            const SizedBox(height: 20),
 
-        const SizedBox(height: 20),
-        _SectionTitle(label: 'PRÉFÉRENCES'),
-        const SizedBox(height: 12),
-        _ProfilItem(icon: Icons.notifications_outlined, title: 'Notifications',
-            subtitle: 'Rappels, alertes glycémie', onTap: () {}),
-        _ProfilItem(icon: Icons.language_outlined, title: 'Langue',
-            subtitle: 'Français', onTap: () {}),
-        _ProfilItem(icon: Icons.lock_outline_rounded, title: 'Sécurité',
-            subtitle: 'Mot de passe, 2FA', onTap: () {}),
-
-        const SizedBox(height: 20),
-        GestureDetector(
-          onTap: () async {
-            await _session.clear();
-            if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
-          },
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.red.shade100)),
-            child: Row(children: [
-              Container(width: 48, height: 48,
-                  decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.logout_rounded, color: Colors.red, size: 24)),
-              const SizedBox(width: 16),
-              const Expanded(child: Text('Se déconnecter',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.red))),
-              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.red.shade300),
-            ]),
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-// ── XFile image
-class _XFileImage extends StatefulWidget {
-  final XFile file;
-  final double size;
-  const _XFileImage({required this.file, required this.size});
-  @override
-  State<_XFileImage> createState() => _XFileImageState();
-}
-class _XFileImageState extends State<_XFileImage> {
-  late Future<Uint8List> _bytesFuture;
-  @override
-  void initState() { super.initState(); _bytesFuture = widget.file.readAsBytes(); }
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List>(
-      future: _bytesFuture,
-      builder: (ctx, snap) {
-        if (snap.hasData) return Image.memory(snap.data!, fit: BoxFit.cover, width: widget.size, height: widget.size);
-        return Container(color: AppColors.c4, child: const Icon(Icons.person_rounded, color: Colors.white, size: 40));
-      },
-    );
-  }
-}
-
-// ── Avatar initials
-class _AvatarInitials extends StatelessWidget {
-  final String name;
-  const _AvatarInitials({required this.name});
-  String get _initials {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
-  @override
-  Widget build(BuildContext context) => Container(
-    color: AppColors.c4,
-    child: Center(child: Text(_initials,
-        style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w800))),
-  );
-}
-
-class _ProfileStat extends StatelessWidget {
-  final String value, label;
-  const _ProfileStat({required this.value, required this.label});
-  @override
-  Widget build(BuildContext context) => Expanded(child: Column(children: [
-    Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-    const SizedBox(height: 3),
-    Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-  ]));
-}
-
-class _HDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(width: 1, height: 36, color: Colors.white24);
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String label;
-  const _SectionTitle({required this.label});
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: Text(label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-            color: AppColors.textGrey, letterSpacing: 1.2)),
-  );
-}
-
-class _ProfilItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-  const _ProfilItem({required this.icon, required this.title, this.subtitle, required this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.c2),
-        boxShadow: [BoxShadow(color: AppColors.c2.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
-      child: Row(children: [
-        Container(width: 48, height: 48,
-            decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: AppColors.c6, size: 24)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(subtitle!, style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            // ── Sign out ──
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onSignOut,
+                icon: const Icon(Icons.logout_rounded, color: Colors.red),
+                label: const Text('Déconnexion',
+                    style: TextStyle(color: Colors.red)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
           ],
-        ])),
-        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.c4),
-      ]),
-    ),
-  );
+        ),
+      ),
+    );
+  }
 }
 
-class _PhotoOption extends StatelessWidget {
+// ─────────────────────────────────────────
+// ── Reusable Widgets
+// ─────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
-  final Color? color;
-  const _PhotoOption({required this.icon, required this.label, required this.onTap, this.color});
+  final String value;
+  final String unit;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.color,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppColors.textDark;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          Text(unit.isEmpty ? label : unit,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          if (unit.isNotEmpty)
+            Text(label,
+                style:
+                    TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(children: [
-          Icon(icon, color: c, size: 24),
-          const SizedBox(width: 16),
-          Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c)),
-        ]),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4))
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 30),
+            const SizedBox(height: 8),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Shared widgets
-class _StatCard extends StatelessWidget {
-  final String label, value, unit;
-  final Color color;
-  const _StatCard({required this.label, required this.value, required this.unit, required this.color});
+class _TipBanner extends StatelessWidget {
+  final List<Map<String, dynamic>> _tips = const [
+    {
+      'icon': '🩸',
+      'title': 'Contrôle glycémique',
+      'text': 'Mangez à intervalles réguliers pour stabiliser votre glycémie.'
+    },
+    {
+      'icon': '🥦',
+      'title': 'Légumes recommandés',
+      'text': 'Privilégiez les légumes verts à faible index glycémique.'
+    },
+    {
+      'icon': '💧',
+      'title': 'Hydratation',
+      'text': 'Buvez au moins 1,5L d\'eau par jour pour aider les reins.'
+    },
+  ];
+
   @override
-  Widget build(BuildContext context) => Expanded(child: Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-      const SizedBox(height: 6),
-      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
-        const SizedBox(width: 5),
-        Padding(padding: const EdgeInsets.only(bottom: 3),
-            child: Text(unit, style: const TextStyle(color: Colors.white70, fontSize: 12))),
-      ]),
-    ]),
-  ));
+  Widget build(BuildContext context) {
+    final tip = _tips[DateTime.now().hour % _tips.length];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withOpacity(0.85),
+            AppColors.primary,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Text(tip['icon'] as String, style: const TextStyle(fontSize: 30)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tip['title'] as String,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(tip['text'] as String,
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.85),
+                        fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _ActionCard extends StatelessWidget {
+class _ProfileMenuItem extends StatelessWidget {
   final IconData icon;
-  final String title, subtitle;
+  final String label;
   final VoidCallback onTap;
-  const _ActionCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
+
+  const _ProfileMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.all(18),
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.c3, width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))]),
-      child: Row(children: [
-        Container(width: 52, height: 52,
-            decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: AppColors.c6, size: 26)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-          const SizedBox(height: 3),
-          Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
-        ])),
-        const Icon(Icons.arrow_forward_ios_rounded, size: 15, color: AppColors.c4),
-      ]),
-    ),
-  );
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.primary),
+        title: Text(label,
+            style: const TextStyle(fontWeight: FontWeight.w500)),
+        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        onTap: onTap,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
 }

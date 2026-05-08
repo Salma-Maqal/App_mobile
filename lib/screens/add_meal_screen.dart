@@ -52,7 +52,7 @@ class _AddMealScreenState extends State<AddMealScreen>
 
   // UI state
   bool _saving = false;
-  bool _saved = false;
+  bool _saved = false;  // ✅ FIX: suppression du '.' parasite
   int  _glasses = 0;
 
   // computed

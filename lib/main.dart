@@ -12,14 +12,16 @@ import 'screens/add_companion_screen.dart';
 import 'screens/verify_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/add_meal_screen.dart';
+import 'screens/nutrition_screen.dart'; // ✅ NOUVEAU
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
- await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await UserSession().load();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
@@ -53,6 +55,7 @@ class CalmSugarApp extends StatelessWidget {
         '/verify':          (_) => const VerifyScreen(),
         '/forgot-password': (_) => const ForgotPasswordScreen(),
         '/add-meal':        (_) => const AddMealScreen(),
+        '/nutrition':       (_) => const NutritionScreen(), // ✅ NOUVEAU
       },
     );
   }
