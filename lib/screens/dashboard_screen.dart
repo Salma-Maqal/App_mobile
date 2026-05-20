@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../app_colors.dart';
 import 'add_meal_screen.dart';
 import 'nutrition_screen.dart';
+import 'historique_screen.dart';
 
 // ─────────────────────────────────────────
 // Dashboard Screen
@@ -358,37 +359,84 @@ class _HomeTab extends StatelessWidget {
             // ── Quick Actions ──
             Text('Actions rapides',
                 style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark)),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF2D2060))),
             const SizedBox(height: 12),
 
+            // Row 1: Ajouter Repas + Sport
             Row(
               children: [
                 Expanded(
-                  child: _ActionButton(
-                    icon: Icons.add_circle_rounded,
-                    label: 'Ajouter repas',
-                    color: AppColors.primary,
+                  child: _GradientActionButton(
+                    emoji: '➕',
+                    label: 'Ajouter Repas',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFA29BFE), Color(0xFF6C5CE7)],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
                     onTap: onAddMeal,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _ActionButton(
-                    icon: Icons.qr_code_scanner_rounded,
-                    label: 'Scanner produit',
-                    color: Colors.teal,
-                    onTap: onGoNutrition,
+                  child: _GradientActionButton(
+                    emoji: '🏃',
+                    label: 'Sport 🏆',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFD9B71), Color(0xFFE17055)],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                    onTap: () => Navigator.pushNamed(context, '/sport'),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
 
-            const SizedBox(height: 28),
+            // Row 2: Glycémie + Eau
+            Row(
+              children: [
+                Expanded(
+                  child: _GradientActionButton(
+                    emoji: '🩸',
+                    label: 'Glycémie',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFEAA7), Color(0xFFFDCB6E)],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                    labelColor: const Color(0xFF7C5C00),
+                    onTap: () => Navigator.pushNamed(context, '/glycemie'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _GradientActionButton(
+                    emoji: '💧',
+                    label: 'Eau',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF74B9FF), Color(0xFF0984E3)],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                    onTap: () => Navigator.pushNamed(context, '/hydratation'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
 
-            // ── Tips ──
-            _TipBanner(),
+            // Row 3: Historique (full width)
+            _GradientActionButton(
+              emoji: '📊',
+              label: 'Historique',
+              gradient: const LinearGradient(
+                colors: [Color(0xFFA29BFE), Color(0xFF6C5CE7)],
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+              ),
+              fullWidth: true,
+              onTap: () => Navigator.pushNamed(context, '/historique'),
+            ),
+
           ],
         ),
       ),
@@ -399,129 +447,10 @@ class _HomeTab extends StatelessWidget {
 // ─────────────────────────────────────────
 // 📊 History Tab
 // ─────────────────────────────────────────
+// _HistoryTab → embed HistoriqueScreen directement
 class _HistoryTab extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(child: Text('Non connecté'));
-    }
-
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: Text('Historique des repas',
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('meals')
-                  .where('userId', isEqualTo: user.uid)
-                  .orderBy('timestamp', descending: true)
-                  .limit(50)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.restaurant_menu_outlined,
-                            size: 60, color: Colors.grey),
-                        SizedBox(height: 12),
-                        Text('Aucun repas enregistré',
-                            style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  );
-                }
-
-                final docs = snapshot.data!.docs;
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
-                    final ts = (data['timestamp'] as Timestamp?)?.toDate();
-                    final dateStr = ts != null
-                        ? '${ts.day}/${ts.month}/${ts.year} ${ts.hour}:${ts.minute.toString().padLeft(2, '0')}'
-                        : '';
-
-                    return Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2))
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(Icons.restaurant_rounded,
-                                color: AppColors.primary),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(data['name'] ?? 'Repas',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15)),
-                                const SizedBox(height: 4),
-                                Text(dateStr,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textGrey)),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('${data['calories'] ?? 0} kcal',
-                                  style: TextStyle(
-                                      color: Colors.deepOrange,
-                                      fontWeight: FontWeight.bold)),
-                              Text('${data['sugar'] ?? 0}g sucre',
-                                  style: TextStyle(
-                                      color: Colors.blue, fontSize: 12)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const HistoriqueScreen();
 }
 
 // ─────────────────────────────────────────
@@ -821,6 +750,65 @@ class _StatCard extends StatelessWidget {
                 style:
                     TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+// Gradient action button (new design)
+// ─────────────────────────────────────────
+class _GradientActionButton extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final LinearGradient gradient;
+  final VoidCallback onTap;
+  final Color? labelColor;
+  final bool fullWidth;
+
+  const _GradientActionButton({
+    required this.emoji,
+    required this.label,
+    required this.gradient,
+    required this.onTap,
+    this.labelColor,
+    this.fullWidth = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: fullWidth ? double.infinity : null,
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.colors.last.withOpacity(0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 26)),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: labelColor ?? Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

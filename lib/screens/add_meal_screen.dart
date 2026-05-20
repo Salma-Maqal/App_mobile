@@ -1,1017 +1,913 @@
 import 'package:flutter/material.dart';
-import '../app_colors.dart';
-import '../meal_store.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-// ─────────────────────────────────────────
-// Data model
-// ─────────────────────────────────────────
-class _Plat {
-  final String name;
-  final String emoji;
-  final String imageUrl;
-  final double glucidesPer100g; // g de glucides / 100 g
-  const _Plat(this.name, this.emoji, this.imageUrl, this.glucidesPer100g);
+// ──────────────────────────────────────────────
+// COULEURS
+// ──────────────────────────────────────────────
+const _kPurple  = Color(0xFF6C5CE7);
+const _kPurple2 = Color(0xFFA29BFE);
+const _kOrange  = Color(0xFFE17055);
+const _kGreen   = Color(0xFF00B894);
+const _kDark    = Color(0xFF2D2060);
+const _kGrey    = Color(0xFF9E8DD0);
+const _kBgPurple= Color(0xFFF0EBFF);
+
+// ──────────────────────────────────────────────
+// MODÈLE PLAT
+// ──────────────────────────────────────────────
+class _Dish {
+  final String emoji, name, desc, prep, level;
+  final Color levelColor;
+  final int cal, gluc, glucPct, prot, protPct, lip, lipPct;
+
+  const _Dish({
+    required this.emoji, required this.name, required this.desc,
+    required this.prep, required this.level, required this.levelColor,
+    required this.cal, required this.gluc, required this.glucPct,
+    required this.prot, required this.protPct, required this.lip, required this.lipPct,
+  });
 }
 
-const _platsMarocains = [
-  _Plat('Couscous',         '🫕', 'assets/images/couscous.jpg',      23.2),
-  _Plat('Tajine de poulet', '🍲', 'assets/images/tajine_poulet.jpg', 8.5),
-  _Plat('Harira',           '🥣', 'assets/images/harira.jpg',        12.4),
-  _Plat('Pastilla',         '🥧', 'assets/images/pastilla.jpg',      28.6),
-  _Plat('Msemen',           '🫓', 'assets/images/msemen.jpg',        41.0),
-  _Plat('Briouates',        '🥟', 'assets/images/briouates.jpg',     22.0),
-  _Plat('Rfissa',           '🍛', 'assets/images/rfissa.jpg',        19.8),
-  _Plat('Zaalouk',          '🍆', 'assets/images/zaalouk.jpg',       7.3),
-  _Plat('Pain marocain',    '🍞', 'assets/images/pain_marocain.jpg', 49.5),
-  _Plat('Sellou',           '🍯', 'assets/images/sellou.jpg',        55.0),
+const _dishes = [
+  _Dish(emoji:'🫕', name:'Couscous Tfaya', desc:'Semoule fine avec oignons caramélisés et raisins secs',
+    prep:'45 Min', level:'Moyen', levelColor:_kGreen,
+    cal:650, gluc:94, glucPct:58, prot:45, protPct:28, lip:22, lipPct:14),
+  _Dish(emoji:'🍲', name:'Harira', desc:'Soupe marocaine aux tomates, lentilles et pois chiches',
+    prep:'60 Min', level:'Facile', levelColor:_kPurple,
+    cal:310, gluc:40, glucPct:52, prot:18, protPct:23, lip:9, lipPct:25),
+  _Dish(emoji:'🍗', name:'Tajine Poulet', desc:'Tajine au poulet avec olives et citron confit',
+    prep:'75 Min', level:'Moyen', levelColor:_kGreen,
+    cal:520, gluc:35, glucPct:27, prot:52, protPct:40, lip:20, lipPct:33),
+  _Dish(emoji:'🥙', name:'Msemen', desc:'Crêpe feuilletée marocaine au beurre et miel',
+    prep:'30 Min', level:'Facile', levelColor:_kPurple,
+    cal:380, gluc:55, glucPct:58, prot:10, protPct:10, lip:15, lipPct:32),
+  _Dish(emoji:'🫙', name:'Zaalouk', desc:'Caviar d\'aubergines aux tomates et épices',
+    prep:'25 Min', level:'Facile', levelColor:_kPurple,
+    cal:180, gluc:22, glucPct:49, prot:5, protPct:11, lip:8, lipPct:40),
+  _Dish(emoji:'🍮', name:'Sellou', desc:'Pâte sucrée aux amandes, sésame et anis',
+    prep:'20 Min', level:'Facile', levelColor:_kPurple,
+    cal:520, gluc:60, glucPct:46, prot:14, protPct:11, lip:26, lipPct:43),
+  _Dish(emoji:'🧆', name:'Briouates', desc:'Feuilletés croustillants au fromage ou viande hachée',
+    prep:'35 Min', level:'Moyen', levelColor:_kGreen,
+    cal:420, gluc:38, glucPct:36, prot:16, protPct:15, lip:22, lipPct:49),
+  _Dish(emoji:'🥧', name:'Pastilla Poulet', desc:'Feuilleté sucré-salé au poulet, amandes et cannelle',
+    prep:'90 Min', level:'Expert', levelColor:_kOrange,
+    cal:580, gluc:52, glucPct:36, prot:34, protPct:23, lip:28, lipPct:41),
 ];
 
-const _typeRepas = [
-  ('Petit-déjeuner', Icons.free_breakfast_rounded),
-  ('Déjeuner',       Icons.lunch_dining_rounded),
-  ('Goûter',         Icons.cookie_rounded),
-  ('Dîner',          Icons.dinner_dining_rounded),
-];
+// Catégories pour les onglets
+const _categories = ['Tout', 'Tajines', 'Soupes', 'Grillades', 'Couscous', 'Pâtiss.'];
 
-// ─────────────────────────────────────────
-// Screen
-// ─────────────────────────────────────────
+// ──────────────────────────────────────────────
+// SCREEN PRINCIPAL
+// ──────────────────────────────────────────────
 class AddMealScreen extends StatefulWidget {
   const AddMealScreen({super.key});
-  @override
-  State<AddMealScreen> createState() => _AddMealScreenState();
+  @override State<AddMealScreen> createState() => _AddMealScreenState();
 }
 
 class _AddMealScreenState extends State<AddMealScreen>
     with SingleTickerProviderStateMixin {
-  // form state
-  int _typeIndex = 0;
-  _Plat? _selectedPlat;
-  final _qtyController = TextEditingController(text: '200');
-  final _formKey = GlobalKey<FormState>();
 
-  // UI state
+  late TabController _tabController;
+  int _dishIndex = 0;
+  int _portions = 1;
+  int _catIndex = 0;
   bool _saving = false;
-  bool _saved = false;  // ✅ FIX: suppression du '.' parasite
-  int  _glasses = 0;
 
-  // computed
-  double get _quantite => double.tryParse(_qtyController.text) ?? 0;
-  double get _glucidesTotal =>
-      _selectedPlat != null ? (_selectedPlat!.glucidesPer100g * _quantite / 100) : 0;
-  bool get _isHighCarb => _glucidesTotal > 60;
+  // Search
+  final _searchCtrl = TextEditingController();
+  List<_Dish> _searchResults = [];
+  bool _searchDone = false;
 
-  // ── Step 7 → 8 : save after optional confirmation
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedPlat == null) {
-      _snack('Veuillez sélectionner un plat.', isError: true);
-      return;
-    }
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
 
-    // Step I : alert if > 60 g glucides
-    if (_isHighCarb) {
-      final confirmed = await _showHighCarbDialog();
-      if (!mounted) return;
-      if (!confirmed) return;
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
-    // Step M : save to MealStore
+  void _prev() => setState(() { _dishIndex = (_dishIndex - 1 + _dishes.length) % _dishes.length; _portions = 1; });
+  void _next() => setState(() { _dishIndex = (_dishIndex + 1) % _dishes.length; _portions = 1; });
+
+  void _search(String q) {
+    if (q.trim().isEmpty) { setState(() { _searchResults = []; _searchDone = false; }); return; }
+    final r = _dishes.where((d) => d.name.toLowerCase().contains(q.toLowerCase())).toList();
+    setState(() { _searchResults = r; _searchDone = true; });
+  }
+
+  Future<void> _addToJournal() async {
     setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    final (typeLabel, typeIcon) = _typeRepas[_typeIndex];
-    final calories = (_selectedPlat!.glucidesPer100g * 4 * _quantite / 100 +
-                      _quantite * 1.5).round();
-
-    await MealStore.instance.add(MealEntry(
-      type:      typeLabel,
-      iconName:  MealEntry.iconNameOf(typeIcon),
-      platName:  _selectedPlat!.name,
-      platEmoji: _selectedPlat!.emoji,
-      glucides:  _glucidesTotal,
-      quantite:  _quantite,
-      calories:  calories,
-      addedAt:   DateTime.now(),
-    ));
-
-    setState(() { _saving = false; _saved = true; });
-
-    // Step O : success message
-    _snack('✅ Repas enregistré avec succès !');
-
-    // Step Q : retour dashboard
-    await Future.delayed(const Duration(milliseconds: 1000));
-    if (mounted) Navigator.pop(context, true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final dish = _dishes[_dishIndex];
+        await FirebaseFirestore.instance.collection('meals').add({
+          'userId':    user.uid,
+          'name':      dish.name,
+          'emoji':     dish.emoji,
+          'portions':  _portions,
+          'calories':  dish.cal * _portions,
+          'glucides':  dish.gluc * _portions,
+          'proteines': dish.prot * _portions,
+          'lipides':   dish.lip * _portions,
+          'mealType':  'repas',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        if (mounted) _showSuccessModal(dish);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
-  Future<bool> _showHighCarbDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => _HighCarbDialog(
-            platName: _selectedPlat!.name,
-            glucides: _glucidesTotal,
+  void _showSuccessModal(_Dish dish) {
+    showDialog(
+      context: context,
+      barrierColor: const Color(0x883C2878),
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 70, height: 70,
+                decoration: const BoxDecoration(color: _kBgPurple, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: Text(dish.emoji, style: const TextStyle(fontSize: 36)),
+              ),
+              const SizedBox(height: 14),
+              const Text('Repas ajouté !',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kDark)),
+              const SizedBox(height: 8),
+              Text('🍽️ ${dish.name} x$_portions',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kPurple)),
+              const SizedBox(height: 8),
+              const Text('Votre repas a été ajouté à votre journal nutritionnel.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () { Navigator.pop(context); Navigator.pop(context); },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: _kPurple,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Super !', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
           ),
-        ) ??
-        false;
-  }
-
-  void _snack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
-        backgroundColor: isError ? AppColors.error : AppColors.c6,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
+        ),
       ),
     );
   }
 
   @override
-  void dispose() {
-    _qtyController.dispose();
-    super.dispose();
-  }
-
-  // ─────────────────────────────────────────
-  // Build
-  // ─────────────────────────────────────────
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: AppColors.c6,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Ajouter un repas',
-          style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic),
-        ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // ── Glucides summary card (live)
-            _GlucidesCard(
-              glucides: _glucidesTotal,
-              platName: _selectedPlat?.name,
-              quantite: _quantite,
-              isHigh: _isHighCarb,
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // ── Sticky Header
+          Container(
+            color: Colors.white,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  // Top row
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.chevron_left, color: _kPurple, size: 20),
+                          ),
+                        ),
+                        const Spacer(),
+                        RichText(
+                          text: const TextSpan(children: [
+                            TextSpan(text: 'Cuisine', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _kDark)),
+                            WidgetSpan(child: SizedBox(width: 4)),
+                            WidgetSpan(child: _Badge(text: 'MA')),
+                          ]),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () { _tabController.animateTo(1); },
+                          child: Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.search, color: _kPurple, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Tab bar
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: _kPurple,
+                    unselectedLabelColor: const Color(0xFFB0A8D8),
+                    labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    indicatorColor: _kPurple,
+                    indicatorWeight: 3,
+                    dividerColor: const Color(0xFFF0EBFF),
+                    tabs: const [
+                      Tab(text: 'Plats MA'),
+                      Tab(text: 'Recherche'),
+                      Tab(text: 'Scanner'),
+                    ],
+                  ),
+                ],
+              ),
             ),
+          ),
 
-            const SizedBox(height: 28),
-
-            // ── Step D : Type de repas
-            _SectionLabel(
-              icon: Icons.schedule_rounded,
-              label: 'Type de repas',
+          // ── Content
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _CuisineTab(
+                  dishIndex: _dishIndex,
+                  portions: _portions,
+                  catIndex: _catIndex,
+                  onPrev: _prev,
+                  onNext: _next,
+                  onPortion: (d) => setState(() => _portions = (_portions + d).clamp(1, 5)),
+                  onCat: (i) => setState(() => _catIndex = i),
+                  onAdd: _saving ? null : _addToJournal,
+                  saving: _saving,
+                ),
+                _SearchTab(
+                  controller: _searchCtrl,
+                  results: _searchResults,
+                  searchDone: _searchDone,
+                  onSearch: _search,
+                  onSelect: (d) {
+                    final idx = _dishes.indexOf(d);
+                    if (idx >= 0) {
+                      setState(() { _dishIndex = idx; _portions = 1; });
+                      _tabController.animateTo(0);
+                    }
+                  },
+                ),
+                const _ScanTab(),
+              ],
             ),
-            const SizedBox(height: 10),
-            _MealTypeSelector(
-              selected: _typeIndex,
-              onSelect: (i) => setState(() => _typeIndex = i),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Step E : Plat marocain
-            _SectionLabel(
-              icon: Icons.restaurant_rounded,
-              label: 'Plat marocain',
-            ),
-            const SizedBox(height: 10),
-            _PlatSelector(
-              selected: _selectedPlat,
-              onSelect: (p) => setState(() => _selectedPlat = p),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Step F : Quantité
-            _SectionLabel(
-              icon: Icons.scale_rounded,
-              label: 'Quantité (grammes)',
-            ),
-            const SizedBox(height: 10),
-            _QuantiteField(
-              controller: _qtyController,
-              onChanged: (_) => setState(() {}),
-            ),
-
-            const SizedBox(height: 36),
-
-            // ── Eau
-            _SectionLabel(
-              icon: Icons.water_drop_rounded,
-              label: 'Eau consommée',
-            ),
-            const SizedBox(height: 10),
-            _EauSelector(
-              glasses: _glasses,
-              onChanged: (v) => setState(() => _glasses = v),
-            ),
-
-            const SizedBox(height: 28),
-
-            // ── Step G : Bouton Enregistrer
-            _SaveButton(
-              saving: _saving,
-              saved: _saved,
-              onTap: _handleSave,
-            ),
-          ]),
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────
-// Live Glucides Summary Card
-// ─────────────────────────────────────────
-class _GlucidesCard extends StatelessWidget {
-  final double glucides;
-  final String? platName;
-  final double quantite;
-  final bool isHigh;
-  const _GlucidesCard({
-    required this.glucides,
-    required this.platName,
-    required this.quantite,
-    required this.isHigh,
+// ──────────────────────────────────────────────
+// TAB: PLATS MA (Carousel)
+// ──────────────────────────────────────────────
+class _CuisineTab extends StatelessWidget {
+  final int dishIndex, portions, catIndex;
+  final VoidCallback onPrev, onNext;
+  final void Function(int) onPortion, onCat;
+  final VoidCallback? onAdd;
+  final bool saving;
+
+  const _CuisineTab({
+    required this.dishIndex, required this.portions, required this.catIndex,
+    required this.onPrev, required this.onNext, required this.onPortion,
+    required this.onCat, required this.onAdd, required this.saving,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isHigh ? const Color(0xFFE65100) : AppColors.c6;
-    final bgColor = isHigh ? const Color(0xFFFFF3E0) : Colors.white;
-    final borderColor = isHigh ? const Color(0xFFFFCC80) : AppColors.c3;
-    final pct = (glucides / 60).clamp(0.0, 1.0);
+    final dish = _dishes[dishIndex];
+    final leftDish  = _dishes[(dishIndex - 1 + _dishes.length) % _dishes.length];
+    final rightDish = _dishes[(dishIndex + 1) % _dishes.length];
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-              color: color.withOpacity(0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.local_fire_department_rounded, color: color, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Glucides estimés',
-                  style: TextStyle(
-                      fontSize: 16,
-                      color: color.withOpacity(0.7),
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 2),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: glucides.toStringAsFixed(1),
-                      style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: color),
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Category scroll
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _categories.length,
+              itemBuilder: (_, i) {
+                final active = catIndex == i;
+                return GestureDetector(
+                  onTap: () => onCat(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: active ? _kPurple : Colors.white,
+                      border: Border.all(color: active ? _kPurple : const Color(0xFFE8E0FF)),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    TextSpan(
-                      text: ' g',
-                      style: TextStyle(
-                          fontSize: 16, color: color.withOpacity(0.6)),
+                    child: Text(_categories[i],
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                        color: active ? Colors.white : _kGrey)),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Carousel
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFFF0EBFF), Colors.white],
+                begin: Alignment.topCenter, end: Alignment.bottomCenter),
+            ),
+            padding: const EdgeInsets.only(top: 20, bottom: 0),
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _DishThumb(emoji: leftDish.emoji),
+                        const SizedBox(width: 10),
+                        _DishMain(emoji: dish.emoji),
+                        const SizedBox(width: 10),
+                        _DishThumb(emoji: rightDish.emoji),
+                      ],
+                    ),
+                    // Arrows
+                    Positioned(
+                      left: 12,
+                      child: GestureDetector(
+                        onTap: onPrev,
+                        child: Container(
+                          width: 28, height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 8)],
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('‹', style: TextStyle(fontSize: 18, color: _kPurple, fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: onNext,
+                        child: Container(
+                          width: 28, height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 8)],
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('›', style: TextStyle(fontSize: 18, color: _kPurple, fontWeight: FontWeight.w900)),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ]),
-          ),
-          if (isHigh)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                  color: const Color(0xFFFFCC80),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Text('⚠️ Élevé',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFE65100))),
-            ),
-        ]),
-        const SizedBox(height: 14),
-        // Progress bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: pct,
-            minHeight: 8,
-            backgroundColor: color.withOpacity(0.12),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('0 g',
-              style: TextStyle(fontSize: 12, color: color.withOpacity(0.5))),
-          Text('Seuil : 60 g',
-              style: TextStyle(
-                  fontSize: 12,
-                  color: color.withOpacity(0.6),
-                  fontWeight: FontWeight.w600)),
-        ]),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-// Section label
-// ─────────────────────────────────────────
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _SectionLabel({required this.icon, required this.label});
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Icon(icon, size: 16, color: AppColors.c6),
-        const SizedBox(width: 6),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textDark)),
-      ]);
-}
-
-// ─────────────────────────────────────────
-// Meal type selector
-// ─────────────────────────────────────────
-class _MealTypeSelector extends StatelessWidget {
-  final int selected;
-  final ValueChanged<int> onSelect;
-  const _MealTypeSelector({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: List.generate(_typeRepas.length, (i) {
-        final (label, icon) = _typeRepas[i];
-        final active = i == selected;
-        return GestureDetector(
-          onTap: () => onSelect(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: (MediaQuery.of(context).size.width - 56) / 3,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: active ? AppColors.c6 : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: active ? AppColors.c6 : AppColors.c3, width: 1.5),
-              boxShadow: active
-                  ? [
-                      BoxShadow(
-                          color: AppColors.c6.withOpacity(0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3))
-                    ]
-                  : [],
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 22, color: active ? Colors.white : AppColors.c5),
-              const SizedBox(height: 4),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: active ? Colors.white : AppColors.textGrey)),
-            ]),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-// Plat selector avec recherche
-// ─────────────────────────────────────────
-class _PlatSelector extends StatefulWidget {
-  final _Plat? selected;
-  final ValueChanged<_Plat> onSelect;
-  const _PlatSelector({required this.selected, required this.onSelect});
-
-  @override
-  State<_PlatSelector> createState() => _PlatSelectorState();
-}
-
-class _PlatSelectorState extends State<_PlatSelector> {
-  final _searchController = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // ✅ FIX : liste vide tant que l'utilisateur n'a pas tapé
-    final filtered = _query.trim().isEmpty
-        ? <_Plat>[]
-        : _platsMarocains
-            .where((p) => p.name.toLowerCase().contains(_query.toLowerCase()))
-            .toList();
-
-    return Column(
-      children: [
-        // ── Barre de recherche
-        TextField(
-          controller: _searchController,
-          onChanged: (v) => setState(() => _query = v),
-          style: const TextStyle(fontSize: 15, color: AppColors.textDark),
-          decoration: InputDecoration(
-            hintText: 'Rechercher un plat...',
-            hintStyle: const TextStyle(color: AppColors.textGrey),
-            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.c5, size: 22),
-            suffixIcon: _query.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textGrey, size: 20),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _query = '');
-                    },
-                  )
-                : null,
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.c3),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.c3, width: 1.5),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.c6, width: 2),
+                // Dots
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_dishes.length, (i) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: i == dishIndex ? 18 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i == dishIndex ? _kPurple : const Color(0xFFD6CFF7),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  )),
+                ),
+                const SizedBox(height: 14),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 12),
 
-        // ── Affichage conditionnel
-        if (_query.trim().isEmpty)
-          // ✅ Message initial : aucune image affichée
+          // ── Dish detail
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
             child: Column(
               children: [
+                Text(dish.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kDark)),
+                const SizedBox(height: 4),
+                Text(dish.desc,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
+                const SizedBox(height: 14),
+
+                // Portions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _PortionBtn(label: '−', onTap: () => onPortion(-1)),
+                    const SizedBox(width: 16),
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(color: _kPurple, borderRadius: BorderRadius.circular(12)),
+                      alignment: Alignment.center,
+                      child: const Text('🍽️', style: TextStyle(fontSize: 22)),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(children: [
+                      Text('$portions', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _kDark)),
+                      const Text('portion(s)', style: TextStyle(fontSize: 12, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
+                    ]),
+                    const SizedBox(width: 16),
+                    _PortionBtn(label: '+', onTap: () => onPortion(1)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Stats 3
+                Row(children: [
+                  Expanded(child: _Stat3Card(icon:'⏱️', label:'Prépa', value: dish.prep, bg: const Color(0xFFF0EBFF), labelColor: _kGrey)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _Stat3Card(icon:'⭐', label:'Niveau', value: dish.level, bg: const Color(0xFFE8FAF5), labelColor: _kGreen, valueColor: dish.levelColor)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _Stat3Card(icon:'🔥', label:'Calories', value: '${dish.cal * portions} Cal', bg: const Color(0xFFFFF4EE), labelColor: _kOrange)),
+                ]),
+                const SizedBox(height: 16),
+
+                // Macros
                 Container(
-                  width: 72,
-                  height: 72,
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.c2,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.search_rounded,
-                      color: AppColors.c5, size: 36),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Recherchez un plat pour voir les résultats',
-                  style: TextStyle(
-                      color: AppColors.textGrey,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Ex: Couscous, Harira, Tajine...',
-                  style: TextStyle(
-                      color: AppColors.textGrey,
-                      fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          )
-        else if (filtered.isEmpty)
-          // ✅ Aucun résultat trouvé
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Column(
-              children: [
-                const Icon(Icons.search_off_rounded,
-                    color: AppColors.textGrey, size: 40),
-                const SizedBox(height: 8),
-                Text(
-                  'Aucun plat trouvé pour "$_query"',
-                  style: const TextStyle(
-                      color: AppColors.textGrey, fontSize: 14),
-                ),
-              ],
-            ),
-          )
-        else
-          // ✅ Liste des plats filtrés avec images
-          ...filtered.map((p) {
-            final active = widget.selected?.name == p.name;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: () => widget.onSelect(p),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.c6 : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: active ? AppColors.c6 : AppColors.c3,
-                        width: active ? 2.5 : 1.5),
-                    boxShadow: active
-                        ? [
-                            BoxShadow(
-                                color: AppColors.c6.withOpacity(0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4))
-                          ]
-                        : [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2))
-                          ],
+                    color: const Color(0xFFF8F5FF),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Image du plat
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(12)),
-                        child: Stack(
-                          children: [
-                            Image.asset(
-                              p.imageUrl,
-                              height: 180,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                height: 180,
-                                color: AppColors.c2,
-                                child: Center(
-                                  child: Text(p.emoji,
-                                      style:
-                                          const TextStyle(fontSize: 36)),
-                                ),
-                              ),
-                            ),
-                            if (active)
-                              Positioned(
-                                top: 6,
-                                right: 6,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                      Icons.check_circle_rounded,
-                                      color: AppColors.c6,
-                                      size: 22),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // Infos du plat
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(p.name,
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: active
-                                        ? Colors.white
-                                        : AppColors.textDark)),
-                            Text('${p.glucidesPer100g} g/100g',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: active
-                                        ? Colors.white.withOpacity(0.75)
-                                        : AppColors.textGrey)),
-                          ],
-                        ),
-                      ),
+                      const Text('Macronutriments',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kDark)),
+                      const SizedBox(height: 12),
+                      _MacroBar(label: 'Glucides', value: dish.gluc * portions, pct: dish.glucPct, color: _kPurple),
+                      const SizedBox(height: 10),
+                      _MacroBar(label: 'Protéines', value: dish.prot * portions, pct: dish.protPct, color: _kOrange),
+                      const SizedBox(height: 10),
+                      _MacroBar(label: 'Lipides', value: dish.lip * portions, pct: dish.lipPct, color: _kGreen),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Add button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: onAdd,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: _kPurple,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      elevation: 0,
+                    ),
+                    child: saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('+ Ajouter au journal', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────
+// TAB: RECHERCHE
+// ──────────────────────────────────────────────
+class _SearchTab extends StatelessWidget {
+  final TextEditingController controller;
+  final List<_Dish> results;
+  final bool searchDone;
+  final void Function(String) onSearch;
+  final void Function(_Dish) onSelect;
+
+  const _SearchTab({
+    required this.controller, required this.results,
+    required this.searchDone, required this.onSearch, required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  onChanged: onSearch,
+                  onSubmitted: onSearch,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _kDark),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, color: _kGrey, size: 18),
+                    hintText: 'Ex: Harira, Tajine, Nutella...',
+                    hintStyle: const TextStyle(color: Color(0xFFC4BCE0)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFE8E0FF), width: 2),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFE8E0FF), width: 2),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: _kPurple, width: 2),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  ),
+                ),
               ),
-            );
-          }),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () => onSearch(controller.text),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  backgroundColor: _kPurple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: const Text('Chercher', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ),
+
+        // Results or hint
+        Expanded(
+          child: !searchDone
+              ? const _SearchHint(
+                  icon: '🔍',
+                  text: 'Recherchez un plat marocain ou un produit alimentaire pour voir ses informations nutritionnelles',
+                )
+              : results.isEmpty
+                  ? const _SearchHint(icon: '😕', text: 'Aucun résultat trouvé')
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      itemCount: results.length,
+                      itemBuilder: (_, i) => _ResultCard(dish: results[i], onTap: () => onSelect(results[i])),
+                    ),
+        ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────
-// Quantité field
-// ─────────────────────────────────────────
-class _QuantiteField extends StatelessWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  const _QuantiteField({required this.controller, required this.onChanged});
+// ──────────────────────────────────────────────
+// TAB: SCANNER
+// ──────────────────────────────────────────────
+class _ScanTab extends StatelessWidget {
+  const _ScanTab();
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: false),
-      onChanged: onChanged,
-      style: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textDark),
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Colors.white,
-        hintText: 'Ex : 200',
-        hintStyle: const TextStyle(color: AppColors.textGrey),
-        suffixText: 'g',
-        suffixStyle: const TextStyle(
-            fontWeight: FontWeight.w700, color: AppColors.c5, fontSize: 16),
-        prefixIcon:
-            const Icon(Icons.scale_rounded, color: AppColors.c5, size: 20),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.c3),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.c3, width: 1.5),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.c6, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-        ),
-      ),
-      validator: (v) {
-        if (v == null || v.isEmpty) return 'Entrez une quantité';
-        final n = double.tryParse(v);
-        if (n == null || n <= 0) return 'Quantité invalide';
-        if (n > 2000) return 'Quantité trop grande';
-        return null;
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-// Glucides hint below field
-// ─────────────────────────────────────────
-class _GlucidesHint extends StatelessWidget {
-  final _Plat plat;
-  final double quantite;
-  final double glucides;
-  final bool isHigh;
-  const _GlucidesHint({
-    required this.plat,
-    required this.quantite,
-    required this.glucides,
-    required this.isHigh,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isHigh ? const Color(0xFFE65100) : AppColors.c6;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(children: [
-        Icon(Icons.calculate_outlined, size: 16, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '${plat.glucidesPer100g} g/100g × ${quantite.toStringAsFixed(0)} g = '
-            '${glucides.toStringAsFixed(1)} g de glucides',
-            style: TextStyle(
-                fontSize: 16, color: color, fontWeight: FontWeight.w600),
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-// Save button
-// ─────────────────────────────────────────
-class _SaveButton extends StatelessWidget {
-  final bool saving;
-  final bool saved;
-  final VoidCallback onTap;
-  const _SaveButton(
-      {required this.saving, required this.saved, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton(
-        onPressed: (saving || saved) ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: saved ? AppColors.c5 : AppColors.c6,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.c4,
-          disabledForegroundColor: Colors.white70,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: saving || saved ? 0 : 3,
-          shadowColor: AppColors.c6.withOpacity(0.3),
-        ),
-        child: saving
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white))
-            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(saved ? Icons.check_circle_rounded : Icons.save_rounded,
-                    size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  saved ? 'Enregistré !' : 'Enregistrer le repas',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700),
-                ),
-              ]),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-// High-carb confirmation dialog (Step J-L)
-// ─────────────────────────────────────────
-class _HighCarbDialog extends StatelessWidget {
-  final String platName;
-  final double glucides;
-  const _HighCarbDialog({required this.platName, required this.glucides});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Warning icon
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Scan viewfinder
           Container(
-            width: 64,
-            height: 64,
+            margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            height: 240,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFFFCC80), width: 2),
+              color: const Color(0xFF1A1A2E),
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.warning_amber_rounded,
-                color: Color(0xFFE65100), size: 32),
-          ),
-          const SizedBox(height: 16),
-
-          const Text('Repas riche en glucides',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textDark)),
-          const SizedBox(height: 10),
-
-          RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: const TextStyle(
-                  fontSize: 15, color: AppColors.textGrey, height: 1.5),
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                const TextSpan(text: 'Ce repas ('),
-                TextSpan(
-                    text: platName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark)),
-                const TextSpan(text: ') contient '),
-                TextSpan(
-                    text: '${glucides.toStringAsFixed(1)} g de glucides',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFE65100))),
-                const TextSpan(
-                    text:
-                        ', ce qui dépasse le seuil recommandé de 60 g.\n\nVoulez-vous quand même l\'enregistrer ?'),
+                const Positioned(
+                  top: 16, left: 0, right: 0,
+                  child: Text('Pointez vers un code-barres',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+                // Viewfinder corners
+                SizedBox(
+                  width: 160, height: 160,
+                  child: CustomPaint(painter: _ViewfinderPainter()),
+                ),
+                // Scan line animation
+                const _ScanLine(),
+                Positioned(
+                  bottom: 14,
+                  child: Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white24, shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text('⚡', style: TextStyle(fontSize: 20)),
+                  ),
+                ),
               ],
             ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // Tip box
+          // Hint card
           Container(
-            width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F8E9),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.c3),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFF0EBFF)),
             ),
-            child: const Text(
-              '💡 Conseil : pensez à surveiller votre glycémie dans les 2h après ce repas.',
-              style: TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textGrey,
-                  fontStyle: FontStyle.italic),
+            child: Column(
+              children: const [
+                Text('📦', style: TextStyle(fontSize: 32)),
+                SizedBox(height: 8),
+                Text(
+                  'Scannez le code-barres d\'un produit alimentaire pour voir ses informations nutritionnelles automatiquement',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: _kGrey, fontWeight: FontWeight.w600, height: 1.5),
+                ),
+              ],
             ),
           ),
-
-          const SizedBox(height: 20),
-
-          // Buttons
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context, false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.c6,
-                  side: const BorderSide(color: AppColors.c4),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Modifier',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE65100),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Confirmer',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ]),
-        ]),
+        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────
-// Eau Selector — verres d'eau
-// ─────────────────────────────────────────
-class _EauSelector extends StatelessWidget {
-  final int glasses;
-  final ValueChanged<int> onChanged;
-  const _EauSelector({required this.glasses, required this.onChanged});
+// ──────────────────────────────────────────────
+// SOUS-WIDGETS
+// ──────────────────────────────────────────────
+class _Badge extends StatelessWidget {
+  final String text;
+  const _Badge({required this.text});
+  @override Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kPurple2)),
+  );
+}
 
-  static const int _max = 8;
+class _DishThumb extends StatelessWidget {
+  final String emoji;
+  const _DishThumb({required this.emoji});
+  @override Widget build(BuildContext context) => Container(
+    width: 70, height: 70,
+    decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
+    alignment: Alignment.center,
+    child: Opacity(opacity: 0.55, child: Text(emoji, style: const TextStyle(fontSize: 32))),
+  );
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final ml = glasses * 250;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.c3, width: 1.5),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Verres cliquables
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(_max, (i) {
-            final filled = i < glasses;
-            return GestureDetector(
-              onTap: () => onChanged(i + 1 == glasses ? 0 : i + 1),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 30, height: 36,
-                decoration: BoxDecoration(
-                  color: filled ? AppColors.c5.withOpacity(0.15) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: filled ? AppColors.c5 : AppColors.c3,
-                    width: 1.5,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    '💧',
-                    style: TextStyle(
-                      fontSize: filled ? 16 : 13,
-                      color: filled ? null : Colors.grey.shade300,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
+class _DishMain extends StatelessWidget {
+  final String emoji;
+  const _DishMain({required this.emoji});
+  @override Widget build(BuildContext context) => Container(
+    width: 110, height: 110,
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.95), shape: BoxShape.circle,
+      boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 32, offset: const Offset(0, 8))],
+    ),
+    alignment: Alignment.center,
+    child: Text(emoji, style: const TextStyle(fontSize: 52)),
+  );
+}
+
+class _PortionBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _PortionBtn({required this.label, required this.onTap});
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 36, height: 36,
+      decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
+      alignment: Alignment.center,
+      child: Text(label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kPurple)),
+    ),
+  );
+}
+
+class _Stat3Card extends StatelessWidget {
+  final String icon, label, value;
+  final Color bg, labelColor;
+  final Color? valueColor;
+  const _Stat3Card({required this.icon, required this.label, required this.value,
+    required this.bg, required this.labelColor, this.valueColor});
+  @override Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
+    child: Column(children: [
+      Text(icon, style: const TextStyle(fontSize: 18)),
+      const SizedBox(height: 2),
+      Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: labelColor)),
+      const SizedBox(height: 2),
+      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: valueColor ?? _kDark)),
+    ]),
+  );
+}
+
+class _MacroBar extends StatelessWidget {
+  final String label;
+  final int value, pct;
+  final Color color;
+  const _MacroBar({required this.label, required this.value, required this.pct, required this.color});
+  @override Widget build(BuildContext context) => Row(children: [
+    SizedBox(width: 70, child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
+    Expanded(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: LinearProgressIndicator(
+          value: pct / 100,
+          minHeight: 7,
+          backgroundColor: const Color(0xFFE8E0FF),
+          valueColor: AlwaysStoppedAnimation<Color>(color),
         ),
+      ),
+    ),
+    const SizedBox(width: 8),
+    SizedBox(width: 60, child: Text('$pct% · ${value}g',
+      textAlign: TextAlign.right,
+      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kGrey))),
+  ]);
+}
+
+class _SearchHint extends StatelessWidget {
+  final String icon, text;
+  const _SearchHint({required this.icon, required this.text});
+  @override Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(icon, style: const TextStyle(fontSize: 48)),
         const SizedBox(height: 12),
-        // Info
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: glasses > 0 ? AppColors.c2 : const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              glasses == 0
-                  ? 'Appuyez sur un verre 💧'
-                  : '$glasses verre${glasses > 1 ? 's' : ''} — $ml ml',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: glasses > 0 ? AppColors.textDark : AppColors.textGrey,
-              ),
-            ),
-          ),
-          const Spacer(),
-          if (glasses > 0)
-            Text(
-              glasses >= 8 ? '🎉 Objectif atteint !' : '${8 - glasses} restants',
-              style: TextStyle(
-                fontSize: 15,
-                color: glasses >= 8 ? AppColors.c5 : AppColors.textGrey,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-        ]),
+        Text(text, textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 14, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600, height: 1.5)),
       ]),
-    );
+    ),
+  );
+}
+
+class _ResultCard extends StatelessWidget {
+  final _Dish dish;
+  final VoidCallback onTap;
+  const _ResultCard({required this.dish, required this.onTap});
+
+  String _nsLabel() {
+    if (dish.cal < 200) return 'A';
+    if (dish.cal < 400) return 'B';
+    if (dish.cal < 550) return 'C';
+    return 'D';
   }
+  Color _nsColor() {
+    switch (_nsLabel()) {
+      case 'A': return const Color(0xFF1E8F4E);
+      case 'B': return const Color(0xFF88B931);
+      case 'C': return const Color(0xFFF0C30F);
+      default:  return const Color(0xFFE77D25);
+    }
+  }
+
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF0EBFF)),
+        boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(children: [
+        Container(
+          width: 60, height: 60,
+          decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(14)),
+          alignment: Alignment.center,
+          child: Text(dish.emoji, style: const TextStyle(fontSize: 28)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(dish.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kDark)),
+          const Text('Cuisine Marocaine', style: TextStyle(fontSize: 11, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 5, runSpacing: 4, children: [
+            _Chip(text: '🔥 ${dish.cal} kcal', bg: const Color(0xFFE8F8F2), color: _kGreen),
+            _Chip(text: '🌾 ${dish.gluc}g gluc', bg: const Color(0xFFFFFBE8), color: const Color(0xFFB7860B)),
+          ]),
+        ])),
+        const SizedBox(width: 8),
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(color: _nsColor(), borderRadius: BorderRadius.circular(8)),
+          alignment: Alignment.center,
+          child: Text(_nsLabel(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
+        ),
+      ]),
+    ),
+  );
+}
+
+class _Chip extends StatelessWidget {
+  final String text;
+  final Color bg, color;
+  const _Chip({required this.text, required this.bg, required this.color});
+  @override Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+    child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+  );
+}
+
+// ──────────────────────────────────────────────
+// SCAN PAINTERS
+// ──────────────────────────────────────────────
+class _ViewfinderPainter extends CustomPainter {
+  @override void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3..strokeCap = StrokeCap.round;
+    const r = 4.0; const s = 22.0;
+    // TL
+    canvas.drawLine(Offset(r, 0), Offset(s, 0), p);
+    canvas.drawLine(Offset(0, r), Offset(0, s), p);
+    // TR
+    canvas.drawLine(Offset(size.width - s, 0), Offset(size.width - r, 0), p);
+    canvas.drawLine(Offset(size.width, r), Offset(size.width, s), p);
+    // BL
+    canvas.drawLine(Offset(r, size.height), Offset(s, size.height), p);
+    canvas.drawLine(Offset(0, size.height - s), Offset(0, size.height - r), p);
+    // BR
+    canvas.drawLine(Offset(size.width - s, size.height), Offset(size.width - r, size.height), p);
+    canvas.drawLine(Offset(size.width, size.height - s), Offset(size.width, size.height - r), p);
+  }
+  @override bool shouldRepaint(_) => false;
+}
+
+class _ScanLine extends StatefulWidget {
+  const _ScanLine();
+  @override State<_ScanLine> createState() => _ScanLineState();
+}
+class _ScanLineState extends State<_ScanLine> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  @override void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.2, end: 0.8).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _anim,
+    builder: (_, __) => Positioned(
+      top: 160 * _anim.value,
+      left: 40, right: 40,
+      child: Container(height: 2,
+        decoration: BoxDecoration(
+          color: _kPurple.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(2),
+          boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.4), blurRadius: 6)],
+        )),
+    ),
+  );
 }

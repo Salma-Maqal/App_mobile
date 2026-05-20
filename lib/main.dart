@@ -12,10 +12,15 @@ import 'screens/add_companion_screen.dart';
 import 'screens/verify_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/add_meal_screen.dart';
-import 'screens/nutrition_screen.dart'; // ✅ NOUVEAU
+import 'screens/nutrition_screen.dart';
 import 'screens/Mon_Profil_screen.dart';
 import 'screens/Nutification_screen.dart';
 import 'screens/securite_screen.dart';
+// ✅ Nouveaux screens
+import 'screens/sport_screen.dart';
+import 'screens/glycemie_screen.dart';
+import 'screens/hydratation_screen.dart';
+import 'screens/historique_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -58,10 +63,15 @@ class CalmSugarApp extends StatelessWidget {
         '/verify':          (_) => const VerifyScreen(),
         '/forgot-password': (_) => const ForgotPasswordScreen(),
         '/add-meal':        (_) => const AddMealScreen(),
-        '/nutrition':       (_) => const NutritionScreen(), // ✅ NOUVEAU
+        '/nutrition':       (_) => const NutritionScreen(),
         '/profile':         (_) => const MonProfilScreen(),
         '/notifications':   (_) => const NotificationsScreen(),
         '/securite':        (_) => const SecuriteScreen(),
+        // ✅ Nouveaux screens
+        '/sport':           (_) => const SportScreen(),
+        '/glycemie':        (_) => const GlycemieScreen(),
+        '/hydratation':     (_) => const HydratationScreen(),
+        '/historique':      (_) => const HistoriqueScreen(),
       },
     );
   }

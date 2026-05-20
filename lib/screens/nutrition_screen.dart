@@ -1,725 +1,476 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import '../app_colors.dart';
-import 'nutrition_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'add_meal_screen.dart';
 
-// ─────────────────────────────────────────
-// Écran principal Nutrition
-// ─────────────────────────────────────────
-class NutritionScreen extends StatefulWidget {
-  const NutritionScreen({super.key});
-  @override
-  State<NutritionScreen> createState() => _NutritionScreenState();
+// ──────────────────────────────────────────────
+// COULEURS
+// ──────────────────────────────────────────────
+const _kPurple  = Color(0xFF6C5CE7);
+const _kPurple2 = Color(0xFFA29BFE);
+const _kOrange  = Color(0xFFE17055);
+const _kGreen   = Color(0xFF00B894);
+const _kDark    = Color(0xFF2D2060);
+const _kGrey    = Color(0xFF9E8DD0);
+const _kBg      = Color(0xFFF8F5FF);
+const _kBgCard  = Color(0xFFF0EBFF);
+
+// ──────────────────────────────────────────────
+// MODÈLE SLOT REPAS
+// ──────────────────────────────────────────────
+class _MealSlot {
+  final String icon;
+  final String name;
+  final String mealType;
+  final String recommended;
+  final Color iconBg;
+
+  const _MealSlot({
+    required this.icon, required this.name,
+    required this.mealType, required this.recommended,
+    required this.iconBg,
+  });
 }
 
-class _NutritionScreenState extends State<NutritionScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final _searchController = TextEditingController();
+const _slots = [
+  _MealSlot(icon:'🥗', name:'Petit-déjeuner', mealType:'petit-dejeuner',
+    recommended:'Recommandé 830–1170 Cal', iconBg:Color(0xFFF0EBFF)),
+  _MealSlot(icon:'🍗', name:'Déjeuner', mealType:'dejeuner',
+    recommended:'Recommandé 255–370 Cal', iconBg:Color(0xFFFFF0E8)),
+  _MealSlot(icon:'🥐', name:'Collation', mealType:'collation',
+    recommended:'Recommandé 150–250 Cal', iconBg:Color(0xFFFFFBE8)),
+  _MealSlot(icon:'🍽️', name:'Dîner', mealType:'diner',
+    recommended:'Recommandé 255–370 Cal', iconBg:Color(0xFFF5F3FF)),
+];
 
-  String _query = '';
-  bool _searching = false;
-  List<FoodProduct> _results = [];
-  String? _searchError;
+// ──────────────────────────────────────────────
+// NutritionScreen
+// ──────────────────────────────────────────────
+class NutritionScreen extends StatefulWidget {
+  const NutritionScreen({super.key});
+  @override State<NutritionScreen> createState() => _NutritionScreenState();
+}
+
+class _NutritionScreenState extends State<NutritionScreen> {
+  DateTime _selectedDay = DateTime.now();
+
+  // Repas chargés depuis Firestore pour le jour sélectionné
+  // map: mealType → list of entries
+  final Map<String, List<Map<String, dynamic>>> _dayMeals = {};
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _loadDay(_selectedDay);
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _loadDay(DateTime day) async {
+    setState(() => _loading = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) { setState(() => _loading = false); return; }
+
+    try {
+      final start = DateTime(day.year, day.month, day.day);
+      final end   = start.add(const Duration(days: 1));
+
+      final snap = await FirebaseFirestore.instance
+          .collection('meals')
+          .where('userId', isEqualTo: user.uid)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('timestamp', isLessThan: Timestamp.fromDate(end))
+          .orderBy('timestamp', descending: false)
+          .get();
+
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final type = (d['mealType'] as String?) ?? 'repas';
+        grouped.putIfAbsent(type, () => []);
+        grouped[type]!.add(d);
+      }
+
+      if (mounted) setState(() { _dayMeals
+        ..clear()
+        ..addAll(grouped); _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  Future<void> _doSearch() async {
-    if (_query.trim().isEmpty) return;
-    setState(() { _searching = true; _searchError = null; _results = []; });
-
-    final list = await NutritionService.searchByName(_query.trim());
-
-    if (!mounted) return;
-    setState(() {
-      _searching = false;
-      _results = list;
-      if (list.isEmpty) _searchError = 'Aucun résultat pour "$_query"';
-    });
+  // Génère les 7 jours de la semaine contenant _selectedDay
+  List<DateTime> get _weekDays {
+    final now = _selectedDay;
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return List.generate(7, (i) => monday.add(Duration(days: i)));
   }
 
-  void _openProduct(FoodProduct product) {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)));
+  int get _totalCalories {
+    int total = 0;
+    for (final list in _dayMeals.values) {
+      for (final m in list) {
+        total += (m['calories'] as num?)?.toInt() ?? 0;
+      }
+    }
+    return total;
   }
+
+  void _selectDay(DateTime d) {
+    setState(() => _selectedDay = d);
+    _loadDay(d);
+  }
+
+  void _goAddMeal() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddMealScreen()));
+    _loadDay(_selectedDay); // refresh après retour
+  }
+
+  String _dayName(int weekday) {
+    const names = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
+    return names[weekday - 1];
+  }
+
+  String _monthName(int month) {
+    const names = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+    return names[month - 1];
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _isToday(DateTime d) => _isSameDay(d, DateTime.now());
 
   @override
   Widget build(BuildContext context) {
+    final week = _weekDays;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: AppColors.c6,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Nutrition 🍎',
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontStyle: FontStyle.italic)),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-          tabs: const [
-            Tab(icon: Icon(Icons.search_rounded, size: 20), text: 'Recherche'),
-            Tab(icon: Icon(Icons.qr_code_scanner_rounded, size: 20), text: 'Scanner'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      backgroundColor: _kBg,
+      body: Column(
         children: [
-          // ── Onglet 1 : Recherche par nom
-          _SearchTab(
-            controller: _searchController,
-            query: _query,
-            searching: _searching,
-            results: _results,
-            error: _searchError,
-            onQueryChanged: (v) => setState(() => _query = v),
-            onSearch: _doSearch,
-            onProductTap: _openProduct,
+          // ── Header purple
+          Container(
+            color: _kPurple,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 34, height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.chevron_left, color: Colors.white, size: 20),
+                      ),
+                    ),
+                    const Expanded(
+                      child: Text('Nutrition 🍏',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
+                    ),
+                    GestureDetector(
+                      onTap: _goAddMeal,
+                      child: Container(
+                        width: 34, height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.add, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          // ── Onglet 2 : Scanner barcode
-          _ScanTab(onScanned: (barcode) async {
-            _tabController.animateTo(0);
-            setState(() { _searching = true; _results = []; _searchError = null; });
-            final product = await NutritionService.searchByBarcode(barcode);
-            if (!mounted) return;
-            setState(() { _searching = false; });
-            if (product != null) {
-              _openProduct(product);
-            } else {
-              setState(() => _searchError = 'Produit introuvable (code: $barcode)');
-            }
-          }),
+
+          // ── Calendrier semaine
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              children: [
+                // Mois + navigation
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => _selectDay(_selectedDay.subtract(const Duration(days: 7))),
+                      child: Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(color: _kBgCard, borderRadius: BorderRadius.circular(8)),
+                        alignment: Alignment.center,
+                        child: const Text('‹', style: TextStyle(fontSize: 16, color: _kPurple, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '📅 ${_isSameDay(_selectedDay, DateTime.now()) ? "Aujourd\'hui, " : ""}${_selectedDay.day} ${_monthName(_selectedDay.month)} ${_selectedDay.year}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kDark),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _selectDay(_selectedDay.add(const Duration(days: 7))),
+                      child: Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(color: _kBgCard, borderRadius: BorderRadius.circular(8)),
+                        alignment: Alignment.center,
+                        child: const Text('›', style: TextStyle(fontSize: 16, color: _kPurple, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Jours
+                Row(
+                  children: week.map((d) {
+                    final active = _isSameDay(d, _selectedDay);
+                    final today  = _isToday(d);
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => _selectDay(d),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: active ? _kPurple : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(_dayName(d.weekday),
+                                style: TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.w700,
+                                  color: active ? Colors.white.withOpacity(0.75) : _kGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('${d.day}',
+                                style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w800,
+                                  color: active ? Colors.white : today ? _kPurple : _kDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 2),
+
+          // ── Total calories du jour
+          if (_totalCalories > 0)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [_kPurple2, _kPurple],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('🔥', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  Text('$_totalCalories Cal consommées aujourd\'hui',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+                ],
+              ),
+            ),
+
+          // ── Meal slots
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: _kPurple))
+                : RefreshIndicator(
+                    color: _kPurple,
+                    onRefresh: () => _loadDay(_selectedDay),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                      itemCount: _slots.length,
+                      itemBuilder: (_, i) {
+                        final slot = _slots[i];
+                        final entries = _dayMeals[slot.mealType] ?? [];
+                        return _MealSlotCard(
+                          slot: slot,
+                          entries: entries,
+                          onAdd: _goAddMeal,
+                        );
+                      },
+                    ),
+                  ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────
-// Onglet Recherche
-// ─────────────────────────────────────────
-class _SearchTab extends StatelessWidget {
-  final TextEditingController controller;
-  final String query;
-  final bool searching;
-  final List<FoodProduct> results;
-  final String? error;
-  final ValueChanged<String> onQueryChanged;
-  final VoidCallback onSearch;
-  final ValueChanged<FoodProduct> onProductTap;
+// ──────────────────────────────────────────────
+// MealSlotCard
+// ──────────────────────────────────────────────
+class _MealSlotCard extends StatelessWidget {
+  final _MealSlot slot;
+  final List<Map<String, dynamic>> entries;
+  final VoidCallback onAdd;
 
-  const _SearchTab({
-    required this.controller,
-    required this.query,
-    required this.searching,
-    required this.results,
-    required this.error,
-    required this.onQueryChanged,
-    required this.onSearch,
-    required this.onProductTap,
+  const _MealSlotCard({
+    required this.slot, required this.entries, required this.onAdd,
   });
 
+  int get _totalCal => entries.fold(0, (s, e) => s + ((e['calories'] as num?)?.toInt() ?? 0));
+
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      // ── Barre de recherche
-      Container(
-        color: AppColors.c6,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onQueryChanged,
-              onSubmitted: (_) => onSearch(),
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              decoration: InputDecoration(
-                hintText: 'Ex: Nutella, lait, yaourt...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
-                suffixIcon: query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
-                        onPressed: () {
-                          controller.clear();
-                          onQueryChanged('');
-                        })
-                    : null,
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.15),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: onSearch,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.c6,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              elevation: 0,
-            ),
-            child: const Text('Chercher', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ]),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF0EBFF)),
+        boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 2))],
       ),
-
-      // ── Résultats
-      Expanded(
-        child: searching
-            ? const Center(child: CircularProgressIndicator(color: AppColors.c6))
-            : error != null
-                ? _EmptyState(message: error!)
-                : results.isEmpty
-                    ? _EmptyState(
-                        icon: Icons.search_rounded,
-                        message: 'Recherchez un produit alimentaire\npour voir ses informations nutritionnelles')
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        itemCount: results.length,
-                        itemBuilder: (_, i) => _ProductCard(
-                            product: results[i],
-                            onTap: () => onProductTap(results[i])),
+      child: Column(
+        children: [
+          // Main row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                // Icon
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(color: slot.iconBg, borderRadius: BorderRadius.circular(14)),
+                  alignment: Alignment.center,
+                  child: Text(slot.icon, style: const TextStyle(fontSize: 24)),
+                ),
+                const SizedBox(width: 14),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(slot.name,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _kDark)),
+                      Text(
+                        entries.isEmpty
+                            ? slot.recommended
+                            : '$_totalCal Cal · ${entries.length} plat${entries.length > 1 ? "s" : ""}',
+                        style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600,
+                          color: entries.isEmpty ? const Color(0xFFB0A8D8) : _kPurple,
+                        ),
                       ),
-      ),
-    ]);
-  }
-}
-
-// ─────────────────────────────────────────
-// Onglet Scanner
-// ─────────────────────────────────────────
-class _ScanTab extends StatefulWidget {
-  final ValueChanged<String> onScanned;
-  const _ScanTab({required this.onScanned});
-  @override
-  State<_ScanTab> createState() => _ScanTabState();
-}
-
-class _ScanTabState extends State<_ScanTab> {
-  final MobileScannerController _scanController = MobileScannerController();
-  bool _scanned = false;
-
-  @override
-  void dispose() {
-    _scanController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(children: [
-      // ── Viewfinder caméra
-      MobileScanner(
-        controller: _scanController,
-        onDetect: (capture) {
-          if (_scanned) return;
-          final barcode = capture.barcodes.firstOrNull?.rawValue;
-          if (barcode != null && barcode.isNotEmpty) {
-            setState(() => _scanned = true);
-            widget.onScanned(barcode);
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) setState(() => _scanned = false);
-            });
-          }
-        },
-      ),
-
-      // ── Overlay avec viseur
-      CustomPaint(
-        painter: _ScanOverlayPainter(),
-        child: const SizedBox.expand(),
-      ),
-
-      // ── Labels
-      Positioned(
-        top: 40,
-        left: 0, right: 0,
-        child: Text('Pointez vers un code-barres',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Colors.white.withOpacity(0.85),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                shadows: [Shadow(blurRadius: 8, color: Colors.black45)])),
-      ),
-
-      // ── Bouton torche
-      Positioned(
-        bottom: 50,
-        left: 0, right: 0,
-        child: Center(
-          child: IconButton(
-            onPressed: () => _scanController.toggleTorch(),
-            icon: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 36),
+                    ],
+                  ),
+                ),
+                // Add button
+                GestureDetector(
+                  onTap: onAdd,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _kPurple,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text('+ Ajouter',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
 
-      // ── Feedback scan réussi
-      if (_scanned)
-        Container(
-          color: Colors.black45,
-          child: const Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 64),
-              SizedBox(height: 12),
-              Text('Code scanné !',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
-            ]),
-          ),
-        ),
-    ]);
-  }
-}
-
-// ─────────────────────────────────────────
-// Carte produit dans la liste
-// ─────────────────────────────────────────
-class _ProductCard extends StatelessWidget {
-  final FoodProduct product;
-  final VoidCallback onTap;
-  const _ProductCard({required this.product, required this.onTap});
-
-  Color get _riskColor => product.glycemicRisk == 2
-      ? const Color(0xFFE53935)
-      : (product.glycemicRisk == 1 ? const Color(0xFFF57C00) : AppColors.c5);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.c3, width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Row(children: [
-          // Image ou fallback
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: product.imageUrl.isNotEmpty
-                ? Image.network(product.imageUrl,
-                    width: 64, height: 64, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _ImageFallback())
-                : _ImageFallback(),
-          ),
-          const SizedBox(width: 14),
-
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(product.name.isNotEmpty ? product.name : 'Produit inconnu',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textDark),
-                maxLines: 2, overflow: TextOverflow.ellipsis),
-            if (product.brand.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(product.brand,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: 8),
-            Row(children: [
-              // Calories
-              _NutriChip(label: '${product.calories.round()} kcal', color: AppColors.c2, textColor: AppColors.textDark),
-              const SizedBox(width: 6),
-              // Sucres
-              _NutriChip(label: '🍬 ${product.sugars.toStringAsFixed(1)}g', color: const Color(0xFFFFF9C4), textColor: const Color(0xFF7B6000)),
-              const SizedBox(width: 6),
-              // IG
-              _NutriChip(
-                  label: product.glycemicLabel,
-                  color: _riskColor.withOpacity(0.12),
-                  textColor: _riskColor),
-            ]),
-          ])),
-
-          // Nutriscore
-          if (product.nutriScore != null) ...[
-            const SizedBox(width: 8),
-            _NutriScore(grade: product.nutriScore!),
+          // Entries list (if any)
+          if (entries.isNotEmpty) ...[
+            const Divider(height: 1, color: Color(0xFFF0EBFF)),
+            ...entries.map((e) => _EntryRow(entry: e)),
           ],
-
-          const SizedBox(width: 6),
-          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.c4),
-        ]),
+        ],
       ),
     );
   }
 }
 
-class _ImageFallback extends StatelessWidget {
+// ──────────────────────────────────────────────
+// EntryRow — une ligne de plat ajouté
+// ──────────────────────────────────────────────
+class _EntryRow extends StatelessWidget {
+  final Map<String, dynamic> entry;
+  const _EntryRow({required this.entry});
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: 64, height: 64,
-    decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(10)),
-    child: const Icon(Icons.fastfood_rounded, color: AppColors.c5, size: 30),
-  );
+  Widget build(BuildContext context) {
+    final emoji    = (entry['emoji'] as String?)  ?? '🍽️';
+    final name     = (entry['name'] as String?)   ?? 'Repas';
+    final portions = (entry['portions'] as num?)?.toInt() ?? 1;
+    final cal      = (entry['calories'] as num?)?.toInt() ?? 0;
+    final gluc     = (entry['glucides'] as num?)?.toInt() ?? 0;
+    final prot     = (entry['proteines'] as num?)?.toInt() ?? 0;
+    final lip      = (entry['lipides'] as num?)?.toInt() ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$name × $portions',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kDark),
+                ),
+              ),
+              Text('$cal Cal',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kPurple)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Mini macro bars
+          Row(children: [
+            _MiniMacro(label: 'G', value: gluc, color: _kPurple),
+            const SizedBox(width: 8),
+            _MiniMacro(label: 'P', value: prot, color: _kOrange),
+            const SizedBox(width: 8),
+            _MiniMacro(label: 'L', value: lip, color: _kGreen),
+          ]),
+        ],
+      ),
+    );
+  }
 }
 
-class _NutriChip extends StatelessWidget {
+class _MiniMacro extends StatelessWidget {
   final String label;
-  final Color color, textColor;
-  const _NutriChip({required this.label, required this.color, required this.textColor});
+  final int value;
+  final Color color;
+  const _MiniMacro({required this.label, required this.value, required this.color});
+
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-    child: Text(label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textColor)),
-  );
-}
-
-class _NutriScore extends StatelessWidget {
-  final String grade;
-  const _NutriScore({required this.grade});
-
-  Color get _bg => switch (grade) {
-    'A' => const Color(0xFF1E8F4E),
-    'B' => const Color(0xFF88B931),
-    'C' => const Color(0xFFF0C30F),
-    'D' => const Color(0xFFE77D25),
-    _   => const Color(0xFFE63E11),
-  };
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 34, height: 34,
-    decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8)),
-    child: Center(child: Text(grade,
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900))),
-  );
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String message;
-  const _EmptyState({this.icon = Icons.search_off_rounded, required this.message});
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(color: AppColors.c2, shape: BoxShape.circle),
-          child: Icon(icon, color: AppColors.c5, size: 40),
-        ),
-        const SizedBox(height: 16),
-        Text(message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textGrey, fontSize: 15, height: 1.5)),
-      ]),
-    ),
-  );
-}
-
-// ── Overlay dessin du viseur scanner
-class _ScanOverlayPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final dim  = size.width * 0.65;
-    final left = (size.width - dim) / 2;
-    final top  = (size.height - dim) / 2;
-    final rect = Rect.fromLTWH(left, top, dim, dim);
-
-    // Zone sombre autour du viseur
-    final bgPaint = Paint()..color = Colors.black54;
-    canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16))),
-      ),
-      bgPaint,
-    );
-
-    // Coins du viseur
-    final paint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-    const len = 30.0;
-    final corners = [
-      [Offset(left, top), Offset(left + len, top), Offset(left, top + len)],
-      [Offset(left + dim, top), Offset(left + dim - len, top), Offset(left + dim, top + len)],
-      [Offset(left, top + dim), Offset(left + len, top + dim), Offset(left, top + dim - len)],
-      [Offset(left + dim, top + dim), Offset(left + dim - len, top + dim), Offset(left + dim, top + dim - len)],
-    ];
-    for (final c in corners) {
-      canvas.drawLine(c[1], c[0], paint);
-      canvas.drawLine(c[0], c[2], paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ─────────────────────────────────────────
-// Écran détail produit
-// ─────────────────────────────────────────
-class ProductDetailScreen extends StatelessWidget {
-  final FoodProduct product;
-  const ProductDetailScreen({super.key, required this.product});
-
-  Color get _riskColor => product.glycemicRisk == 2
-      ? const Color(0xFFE53935)
-      : (product.glycemicRisk == 1 ? const Color(0xFFF57C00) : AppColors.c5);
-
-  Color get _riskBg => product.glycemicRisk == 2
-      ? const Color(0xFFFFEBEE)
-      : (product.glycemicRisk == 1 ? const Color(0xFFFFF8E1) : const Color(0xFFE8F5E9));
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: AppColors.c6,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          product.name.isNotEmpty ? product.name : 'Produit',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-          // ── Hero card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.c3, width: 1.5),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 4))],
-            ),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: product.imageUrl.isNotEmpty
-                    ? Image.network(product.imageUrl,
-                        width: 100, height: 100, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _HeroFallback())
-                    : _HeroFallback(),
-              ),
-              const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(product.name.isNotEmpty ? product.name : 'Produit inconnu',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                if (product.brand.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(product.brand,
-                      style: const TextStyle(fontSize: 14, color: AppColors.textGrey)),
-                ],
-                const SizedBox(height: 12),
-                if (product.nutriScore != null)
-                  Row(children: [
-                    const Text('Nutri-Score : ',
-                        style: TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w600)),
-                    _NutriScore(grade: product.nutriScore!),
-                  ]),
-              ])),
-            ]),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ── Alerte glycémique (diabète)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: _riskBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _riskColor.withOpacity(0.3), width: 1.5),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  width: 46, height: 46,
-                  decoration: BoxDecoration(
-                      color: _riskColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Icon(Icons.monitor_heart_rounded, color: _riskColor, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Indice Glycémique estimé',
-                      style: TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  Text(product.glycemicLabel,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _riskColor)),
-                ]),
-              ]),
-              const SizedBox(height: 12),
-              Text(product.glycemicAdvice,
-                  style: TextStyle(fontSize: 14, color: _riskColor.withOpacity(0.8), height: 1.4)),
-            ]),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Tableau nutritionnel
-          _SectionLabel(icon: Icons.pie_chart_rounded, label: 'Valeurs nutritionnelles / 100g'),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.c3, width: 1.5),
-            ),
-            child: Column(children: [
-              _NutrientRow(label: '🔥 Calories',    value: '${product.calories.round()} kcal',                isFirst: true),
-              _NutrientRow(label: '🌾 Glucides',    value: '${product.carbohydrates.toStringAsFixed(1)} g'),
-              _NutrientRow(label: '🍬 dont Sucres', value: '${product.sugars.toStringAsFixed(1)} g',          indent: true),
-              _NutrientRow(label: '🥑 Graisses',   value: '${product.fat.toStringAsFixed(1)} g'),
-              _NutrientRow(label: '💪 Protéines',  value: '${product.proteins.toStringAsFixed(1)} g',         isLast: true),
-            ]),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Conseils pour diabétiques
-          _SectionLabel(icon: Icons.tips_and_updates_rounded, label: 'Conseils diabète'),
-          const SizedBox(height: 12),
-          _TipCard(
-            icon: Icons.info_outline_rounded,
-            color: AppColors.c6,
-            text: 'Les informations nutritionnelles sont pour 100g. Adaptez selon votre portion réelle.',
-          ),
-          const SizedBox(height: 10),
-          if (product.sugars > 15)
-            _TipCard(
-              icon: Icons.warning_amber_rounded,
-              color: const Color(0xFFE53935),
-              text: 'Teneur en sucres élevée (${product.sugars.toStringAsFixed(1)}g/100g). Surveillez votre glycémie après consommation.',
-            ),
-          if (product.sugars <= 5)
-            _TipCard(
-              icon: Icons.check_circle_outline_rounded,
-              color: AppColors.c5,
-              text: 'Teneur en sucres faible (${product.sugars.toStringAsFixed(1)}g/100g). Produit adapté aux diabétiques en portions normales.',
-            ),
-          const SizedBox(height: 10),
-          _TipCard(
-            icon: Icons.access_time_rounded,
-            color: const Color(0xFF1565C0),
-            text: 'Pensez à mesurer votre glycémie 1h30 à 2h après le repas pour suivre l\'impact réel.',
-          ),
-
-        ]),
-      ),
-    );
-  }
-}
-
-class _HeroFallback extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 100, height: 100,
-    decoration: BoxDecoration(color: AppColors.c2, borderRadius: BorderRadius.circular(14)),
-    child: const Icon(Icons.fastfood_rounded, color: AppColors.c5, size: 48),
-  );
-}
-
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _SectionLabel({required this.icon, required this.label});
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Icon(icon, size: 18, color: AppColors.c6),
-    const SizedBox(width: 8),
-    Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-  ]);
-}
-
-class _NutrientRow extends StatelessWidget {
-  final String label, value;
-  final bool isFirst, isLast, indent;
-  const _NutrientRow({
-    required this.label,
-    required this.value,
-    this.isFirst = false,
-    this.isLast = false,
-    this.indent = false,
-  });
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: EdgeInsets.fromLTRB(indent ? 32 : 16, 14, 16, 14),
     decoration: BoxDecoration(
-      border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.c2, width: 1)),
-      borderRadius: isFirst
-          ? const BorderRadius.vertical(top: Radius.circular(14))
-          : (isLast ? const BorderRadius.vertical(bottom: Radius.circular(14)) : BorderRadius.zero),
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
     ),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label,
-          style: TextStyle(
-              fontSize: 14,
-              color: indent ? AppColors.textGrey : AppColors.textDark,
-              fontWeight: indent ? FontWeight.w500 : FontWeight.w700)),
-      Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-    ]),
-  );
-}
-
-class _TipCard extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String text;
-  const _TipCard({required this.icon, required this.color, required this.text});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.07),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: color.withOpacity(0.2)),
-    ),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, color: color, size: 20),
-      const SizedBox(width: 10),
-      Expanded(child: Text(text,
-          style: TextStyle(fontSize: 13, color: color, height: 1.4, fontWeight: FontWeight.w500))),
-    ]),
+    child: Text('$label: ${value}g',
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
   );
 }
