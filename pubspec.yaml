@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
 
+
   cupertino_icons: ^1.0.8
   curved_navigation_bar: ^1.0.3
   shared_preferences: ^2.3.2
@@ -18,11 +19,11 @@ dependencies:
   firebase_core: ^3.15.0
   firebase_auth: ^5.1.0
   cloud_firestore: ^5.6.12
-
+  fl_chart: ^0.68.0
   # ── Module Nutrition (nouveau)
   http: ^1.2.2                  # Appels API OpenFoodFacts
   mobile_scanner: ^6.0.0        # Scanner code-barres
-
+  flutter_barcode_scanner: ^2.0.0   # Scanner code-barres alternatif
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -32,3 +33,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/snacks/
+    - assets/images/healthy/
+    - assets/images/salade/
+    - assets/images/soupe/
+    - assets/images/boissons/
+    - assets/images/dessert/
+    - assets/images/viande/
+    - assets/images/poisson/
+    - assets/images/breakfast/
+    - assets/typeRepas/
+    

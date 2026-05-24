@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '/diabetes_analyzer.dart';
 
 // ──────────────────────────────────────────────
 // COULEURS
@@ -12,52 +15,313 @@ const _kGreen   = Color(0xFF00B894);
 const _kDark    = Color(0xFF2D2060);
 const _kGrey    = Color(0xFF9E8DD0);
 const _kBgPurple= Color(0xFFF0EBFF);
+const _kBgScaffold = Color(0xFFF7F8FC);
 
 // ──────────────────────────────────────────────
 // MODÈLE PLAT
 // ──────────────────────────────────────────────
 class _Dish {
-  final String emoji, name, desc, prep, level;
+  final String emoji, name, desc, prep, level, category, imageUrl;
   final Color levelColor;
   final int cal, gluc, glucPct, prot, protPct, lip, lipPct;
+  final int glycemicIndex;
+  final bool isFromApi; 
 
   const _Dish({
     required this.emoji, required this.name, required this.desc,
     required this.prep, required this.level, required this.levelColor,
     required this.cal, required this.gluc, required this.glucPct,
     required this.prot, required this.protPct, required this.lip, required this.lipPct,
+    required this.category, required this.imageUrl, required this.glycemicIndex,
+    this.isFromApi = false,
   });
+
+  factory _Dish.fromOpenFoodFacts(Map<String, dynamic> json) {
+    final nutrients = json['nutriments'] ?? {};
+    final int calories = (nutrients['energy-kcal_100g'] ?? nutrients['energy-kcal'] ?? 0).toInt();
+    final int carbohydrates = (nutrients['carbohydrates_100g'] ?? 0).toInt();
+    final int proteins = (nutrients['proteins_100g'] ?? 0).toInt();
+    final int fats = (nutrients['fat_100g'] ?? 0).toInt();
+    final String brand = json['brands'] ?? 'Inconnue';
+
+    int estimatedGI = 35;
+    if (carbohydrates > 20) estimatedGI = 55;
+    if (carbohydrates > 50) estimatedGI = 75;
+
+    return _Dish(
+      emoji: '📦',
+      name: json['product_name_fr'] ?? json['product_name'] ?? 'Produit Inconnu',
+      desc: 'Marque: $brand · Portion de 100g',
+      prep: '--',
+      level: 'Industriel',
+      levelColor: _kOrange,
+      cal: calories,
+      gluc: carbohydrates, glucPct: 0,
+      prot: proteins, protPct: 0,
+      lip: fats, lipPct: 0,
+      category: 'Open Food Facts',
+      imageUrl: json['image_front_url'] ?? '',
+      glycemicIndex: estimatedGI,
+      isFromApi: true,
+    );
+  }
 }
 
+class _MealItem {
+  final _Dish dish;
+  final int portions;
+  const _MealItem({required this.dish, required this.portions});
+
+  int get totalCal   => dish.cal  * portions;
+  int get totalGluc  => dish.gluc * portions;
+  int get totalProt  => dish.prot * portions;
+  int get totalLip   => dish.lip  * portions;
+}
+
+// ──────────────────────────────────────────────
+// DONNÉES DES PLATS
+// ──────────────────────────────────────────────
 const _dishes = [
-  _Dish(emoji:'🫕', name:'Couscous Tfaya', desc:'Semoule fine avec oignons caramélisés et raisins secs',
-    prep:'45 Min', level:'Moyen', levelColor:_kGreen,
-    cal:650, gluc:94, glucPct:58, prot:45, protPct:28, lip:22, lipPct:14),
-  _Dish(emoji:'🍲', name:'Harira', desc:'Soupe marocaine aux tomates, lentilles et pois chiches',
+  // ==================== SALADES ====================
+  _Dish(
+    emoji:'🥗', name:'Salade César',
+    desc:'Laitue romaine, poulet, parmesan, sauce César',
+    prep:'15 Min', level:'Facile', levelColor:_kPurple,
+    cal:350, gluc:15, glucPct:20, prot:25, protPct:35, lip:22, lipPct:45,
+    category:'Salades', imageUrl:'assets/images/salade/salade_cesar.jpg', glycemicIndex:25,
+  ),
+  _Dish(
+    emoji:'🥗', name:'Salade Marocaine',
+    desc:'Tomates, oignons, concombre, coriandre',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:120, gluc:18, glucPct:60, prot:3, protPct:10, lip:4, lipPct:30,
+    category:'Salades', imageUrl:'assets/images/salade/salade_marocaine.jpg', glycemicIndex:30,
+  ),
+  _Dish(
+    emoji:'🐟', name:'Salade de Thon',
+    desc:'Thon, maïs, tomates, œufs, olives',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:280, gluc:12, glucPct:17, prot:22, protPct:31, lip:16, lipPct:52,
+    category:'Salades', imageUrl:'assets/images/salade/salade_thon.png', glycemicIndex:35,
+  ),
+  _Dish(
+    emoji:'🥗', name:'Salade Grecque',
+    desc:'Feta, olives, concombre, tomates, oignon',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:250, gluc:10, glucPct:16, prot:8, protPct:13, lip:18, lipPct:71,
+    category:'Salades', imageUrl:'assets/images/salade/salade_grec.jpg', glycemicIndex:30,
+  ),
+  _Dish(
+    emoji:'🥑', name:'Salade Avocat Crevettes',
+    desc:'Avocat, crevettes, tomates cerises, citron',
+    prep:'15 Min', level:'Facile', levelColor:_kPurple,
+    cal:320, gluc:10, glucPct:12, prot:18, protPct:22, lip:24, lipPct:66,
+    category:'Salades', imageUrl:'assets/images/salade/salade_crevette.jpg', glycemicIndex:25,
+  ),
+
+  // ==================== SOUPES ====================
+  _Dish(
+    emoji:'🍲', name:'Harira',
+    desc:'Soupe marocaine aux tomates, lentilles et pois chiches',
     prep:'60 Min', level:'Facile', levelColor:_kPurple,
-    cal:310, gluc:40, glucPct:52, prot:18, protPct:23, lip:9, lipPct:25),
-  _Dish(emoji:'🍗', name:'Tajine Poulet', desc:'Tajine au poulet avec olives et citron confit',
-    prep:'75 Min', level:'Moyen', levelColor:_kGreen,
-    cal:520, gluc:35, glucPct:27, prot:52, protPct:40, lip:20, lipPct:33),
-  _Dish(emoji:'🥙', name:'Msemen', desc:'Crêpe feuilletée marocaine au beurre et miel',
+    cal:310, gluc:40, glucPct:52, prot:18, protPct:23, lip:9, lipPct:25,
+    category:'Soupes', imageUrl:'assets/images/soupe/harira.jpg', glycemicIndex:45,
+  ),
+  _Dish(
+    emoji:'🥔', name:'Velouté de Potiron',
+    desc:'Potiron, crème, graines de courge',
     prep:'30 Min', level:'Facile', levelColor:_kPurple,
-    cal:380, gluc:55, glucPct:58, prot:10, protPct:10, lip:15, lipPct:32),
-  _Dish(emoji:'🫙', name:'Zaalouk', desc:'Caviar d\'aubergines aux tomates et épices',
+    cal:160, gluc:22, glucPct:55, prot:4, protPct:10, lip:6, lipPct:35,
+    category:'Soupes', imageUrl:'assets/images/soupe/Potiron.jpg', glycemicIndex:65,
+  ),
+  _Dish(
+    emoji:'🥕', name:'Soupe de Légumes',
+    desc:'Carottes, poireaux, pommes de terre, céleri',
     prep:'25 Min', level:'Facile', levelColor:_kPurple,
-    cal:180, gluc:22, glucPct:49, prot:5, protPct:11, lip:8, lipPct:40),
-  _Dish(emoji:'🍮', name:'Sellou', desc:'Pâte sucrée aux amandes, sésame et anis',
-    prep:'20 Min', level:'Facile', levelColor:_kPurple,
-    cal:520, gluc:60, glucPct:46, prot:14, protPct:11, lip:26, lipPct:43),
-  _Dish(emoji:'🧆', name:'Briouates', desc:'Feuilletés croustillants au fromage ou viande hachée',
-    prep:'35 Min', level:'Moyen', levelColor:_kGreen,
-    cal:420, gluc:38, glucPct:36, prot:16, protPct:15, lip:22, lipPct:49),
-  _Dish(emoji:'🥧', name:'Pastilla Poulet', desc:'Feuilleté sucré-salé au poulet, amandes et cannelle',
+    cal:120, gluc:18, glucPct:60, prot:4, protPct:13, lip:3, lipPct:27,
+    category:'Soupes', imageUrl:'assets/images/soupe/legume.jpg', glycemicIndex:50,
+  ),
+  _Dish(
+    emoji:'🍗', name:'Chorba Poulet',
+    desc:'Soupe algérienne au poulet, vermicelles et pois chiches',
+    prep:'45 Min', level:'Moyen', levelColor:_kGreen,
+    cal:280, gluc:35, glucPct:50, prot:20, protPct:28, lip:8, lipPct:22,
+    category:'Soupes', imageUrl:'assets/images/soupe/Poulet.jpg', glycemicIndex:55,
+  ),
+  _Dish(
+    emoji:'🫘', name:'Soupe Lentilles',
+    desc:'Lentilles corail, carottes, oignons, cumin',
+    prep:'35 Min', level:'Facile', levelColor:_kPurple,
+    cal:190, gluc:28, glucPct:59, prot:12, protPct:25, lip:3, lipPct:16,
+    category:'Soupes', imageUrl:'assets/images/soupe/lentille.jpg', glycemicIndex:40,
+  ),
+  _Dish(
+    emoji:'🥒', name:'Velouté Courgette',
+    desc:'Courgettes, pommes de terre, menthe, crème',
+    prep:'25 Min', level:'Facile', levelColor:_kPurple,
+    cal:130, gluc:15, glucPct:46, prot:5, protPct:15, lip:6, lipPct:39,
+    category:'Soupes', imageUrl:'assets/images/soupe/Courgette.jpg', glycemicIndex:50,
+  ),
+
+  // ==================== VIANDE ====================
+  _Dish(
+    emoji:'🍗', name:'Tajine Poulet',
+    desc:'Poulet, olives, citron confit',
+    prep:'75 Min', level:'Moyen', levelColor:_kGreen,
+    cal:520, gluc:35, glucPct:27, prot:52, protPct:40, lip:20, lipPct:33,
+    category:'Viande', imageUrl:'assets/images/viande/Tajine_Poulet.jpg', glycemicIndex:50,
+  ),
+  _Dish(
+    emoji:'🥩', name:'Boulettes Kefta',
+    desc:'Viande hachée, persil, oignon, épices',
+    prep:'25 Min', level:'Facile', levelColor:_kPurple,
+    cal:380, gluc:8, glucPct:8, prot:32, protPct:34, lip:25, lipPct:58,
+    category:'Viande', imageUrl:'assets/images/viande/Kefta.jpg', glycemicIndex:20,
+  ),
+  _Dish(
+    emoji:'🍢', name:'Brochettes de Bœuf',
+    desc:'Bœuf tendre mariné, poivrons, oignons',
+    prep:'30 Min', level:'Moyen', levelColor:_kGreen,
+    cal:350, gluc:5, glucPct:6, prot:40, protPct:46, lip:18, lipPct:48,
+    category:'Viande', imageUrl:'assets/images/viande/Boeuf.jpg', glycemicIndex:15,
+  ),
+  _Dish(
+    emoji:'🍖', name:'Tajine Viande Pruneaux',
+    desc:'Viande d\'agneau, pruneaux, amandes',
     prep:'90 Min', level:'Expert', levelColor:_kOrange,
-    cal:580, gluc:52, glucPct:36, prot:34, protPct:23, lip:28, lipPct:41),
+    cal:650, gluc:45, glucPct:28, prot:40, protPct:25, lip:38, lipPct:47,
+    category:'Viande', imageUrl:'assets/images/viande/Tajine_Viande.jpg', glycemicIndex:60,
+  ),
+
+  // ==================== POISSON ====================
+  _Dish(
+    emoji:'🐟', name:'Saumon Grillé',
+    desc:'Saumon frais, herbes, citron',
+    prep:'20 Min', level:'Facile', levelColor:_kPurple,
+    cal:420, gluc:2, glucPct:2, prot:40, protPct:38, lip:28, lipPct:60,
+    category:'Poisson', imageUrl:'assets/images/poisson/Saumon.jpg', glycemicIndex:10,
+  ),
+  _Dish(
+    emoji:'🐠', name:'Tajine Poisson',
+    desc:'Poisson, légumes, épices marocaines',
+    prep:'45 Min', level:'Moyen', levelColor:_kGreen,
+    cal:380, gluc:28, glucPct:30, prot:35, protPct:37, lip:14, lipPct:33,
+    category:'Poisson', imageUrl:'assets/images/poisson/Tajine_poisson.jpg', glycemicIndex:45,
+  ),
+  _Dish(
+    emoji:'🐟', name:'Sardines Farcies',
+    desc:'Sardines fraîches farcies aux herbes',
+    prep:'30 Min', level:'Moyen', levelColor:_kGreen,
+    cal:320, gluc:5, glucPct:6, prot:28, protPct:35, lip:20, lipPct:59,
+    category:'Poisson', imageUrl:'assets/images/poisson/Sardines.jpg', glycemicIndex:10,
+  ),
+
+  // ==================== SNACKS ====================
+  _Dish(
+    emoji:'🥪', name:'Sandwich Poulet',
+    desc:'Poulet grillé, crudités, sauce légère',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:450, gluc:45, glucPct:40, prot:30, protPct:27, lip:18, lipPct:33,
+    category:'Snacks', imageUrl:'assets/images/snacks/Sandwich_Poulet.jpg', glycemicIndex:65,
+  ),
+  _Dish(
+    emoji:'🥙', name:'Panini Fromage',
+    desc:'Pain panini, mozzarella, tomates, pesto',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:480, gluc:50, glucPct:42, prot:20, protPct:17, lip:22, lipPct:41,
+    category:'Snacks', imageUrl:'assets/images/snacks/Panini_Fromage.jpg', glycemicIndex:70,
+  ),
+  _Dish(
+    emoji:'🥙', name:'Msemen',
+    desc:'Crêpe feuilletée marocaine au beurre et miel',
+    prep:'30 Min', level:'Facile', levelColor:_kPurple,
+    cal:380, gluc:55, glucPct:58, prot:10, protPct:10, lip:15, lipPct:32,
+    category:'Snacks', imageUrl:'assets/images/snacks/Msemen.jpg', glycemicIndex:75,
+  ),
+  _Dish(
+    emoji:'🧆', name:'Briouates',
+    desc:'Feuilletés croustillants',
+    prep:'35 Min', level:'Moyen', levelColor:_kGreen,
+    cal:420, gluc:38, glucPct:36, prot:16, protPct:15, lip:22, lipPct:49,
+    category:'Snacks', imageUrl:'assets/images/snacks/Briouates.jpg', glycemicIndex:70,
+  ),
+
+  // ==================== BOISSONS ====================
+  _Dish(
+    emoji:'🥤', name:'Jus d\'Orange',
+    desc:'Jus d\'orange frais pressé',
+    prep:'5 Min', level:'Facile', levelColor:_kPurple,
+    cal:110, gluc:26, glucPct:96, prot:2, protPct:4, lip:0, lipPct:0,
+    category:'Boissons', imageUrl:'assets/images/boissons/Orange.jpg', glycemicIndex:75,
+  ),
+  _Dish(
+    emoji:'🍌', name:'Smoothie Banane',
+    desc:'Banane, lait d\'amande, miel',
+    prep:'5 Min', level:'Facile', levelColor:_kPurple,
+    cal:200, gluc:40, glucPct:80, prot:5, protPct:10, lip:2, lipPct:10,
+    category:'Boissons', imageUrl:'assets/images/boissons/Banane.jpg', glycemicIndex:65,
+  ),
+  _Dish(
+    emoji:'🍃', name:'Thé à la Menthe',
+    desc:'Thé vert, menthe fraîche, sucre',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:60, gluc:15, glucPct:100, prot:0, protPct:0, lip:0, lipPct:0,
+    category:'Boissons', imageUrl:'assets/images/boissons/The.jpg', glycemicIndex:70,
+  ),
+  _Dish(
+    emoji:'☕', name:'Café Noir',
+    desc:'Café expresso',
+    prep:'5 Min', level:'Facile', levelColor:_kPurple,
+    cal:5, gluc:1, glucPct:100, prot:0, protPct:0, lip:0, lipPct:0,
+    category:'Boissons', imageUrl:'assets/images/boissons/Cafe.jpg', glycemicIndex:0,
+  ),
+
+  // ==================== DESSERTS ====================
+  _Dish(
+    emoji:'🍮', name:'Sellou',
+    desc:'Pâte sucrée aux amandes, sésame',
+    prep:'20 Min', level:'Facile', levelColor:_kPurple,
+    cal:520, gluc:60, glucPct:46, prot:14, protPct:11, lip:26, lipPct:43,
+    category:'Desserts', imageUrl:'assets/images/snacks/Sellou.jpg', glycemicIndex:75,
+  ),
+  _Dish(
+    emoji:'🍎', name:'Salade de Fruits',
+    desc:'Fruits de saison, jus d\'orange, menthe',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:120, gluc:28, glucPct:93, prot:1, protPct:3, lip:1, lipPct:4,
+    category:'Desserts', imageUrl:'assets/images/dessert/salade_fruits.jpg', glycemicIndex:55,
+  ),
+  _Dish(
+    emoji:'🥞', name:'Crêpe Miel',
+    desc:'Crêpe légère, miel d\'acacia',
+    prep:'15 Min', level:'Facile', levelColor:_kPurple,
+    cal:220, gluc:38, glucPct:69, prot:6, protPct:11, lip:5, lipPct:20,
+    category:'Desserts', imageUrl:'assets/images/dessert/Crepe.jpg', glycemicIndex:80,
+  ),
+
+  // ==================== HEALTHY ====================
+  _Dish(
+    emoji:'🍗', name:'Poulet Vapeur Riz',
+    desc:'Poulet vapeur, riz complet, légumes',
+    prep:'25 Min', level:'Facile', levelColor:_kPurple,
+    cal:480, gluc:55, glucPct:46, prot:38, protPct:32, lip:12, lipPct:22,
+    category:'Healthy', imageUrl:'assets/images/healthy/poulet_vapeur_riz.jpg', glycemicIndex:55,
+  ),
+
+  // ==================== OMELETTE ====================
+  _Dish(
+    emoji:'🍳', name:'Omelette Fromage',
+    desc:'Œufs, fromage râpé, ciboulette',
+    prep:'10 Min', level:'Facile', levelColor:_kPurple,
+    cal:320, gluc:2, glucPct:3, prot:22, protPct:27, lip:25, lipPct:70,
+    category:'Omlette', imageUrl:'assets/images/breakfast/Omelette_Fromage.jpg', glycemicIndex:5,
+  ),
 ];
 
-// Catégories pour les onglets
-const _categories = ['Tout', 'Tajines', 'Soupes', 'Grillades', 'Couscous', 'Pâtiss.'];
+const _categories = [
+  'Tous', 'Salades', 'Soupes', 'Viande', 'Poisson',
+  'Snacks', 'Boissons', 'Desserts', 'Healthy', 'Omelette',
+];
 
 // ──────────────────────────────────────────────
 // SCREEN PRINCIPAL
@@ -67,179 +331,243 @@ class AddMealScreen extends StatefulWidget {
   @override State<AddMealScreen> createState() => _AddMealScreenState();
 }
 
-class _AddMealScreenState extends State<AddMealScreen>
-    with SingleTickerProviderStateMixin {
-
-  late TabController _tabController;
+class _AddMealScreenState extends State<AddMealScreen> {
   int _dishIndex = 0;
-  int _portions = 1;
-  int _catIndex = 0;
-  bool _saving = false;
+  int _portions  = 1;
+  int _catIndex  = 0;
+  bool _isApiLoading = false;
 
-  // Search
+  _Dish? _scannedApiDish;
+
+  final List<_MealItem> _selectedMeals = [];
   final _searchCtrl = TextEditingController();
-  List<_Dish> _searchResults = [];
-  bool _searchDone = false;
+  
+  List<_Dish> _localSearchResults = [];
+  List<_Dish> _apiSearchResults = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+  _Dish get _currentActiveDish {
+    if (_scannedApiDish != null) return _scannedApiDish!;
+    final dishes = _filteredDishes;
+    return dishes.isNotEmpty ? dishes[_dishIndex] : _dishes.first;
+  }
+
+  List<_Dish> get _filteredDishes {
+    if (_catIndex == 0) return _dishes;
+    final cat = _categories[_catIndex];
+    return _dishes.where((d) => d.category == cat).toList();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _prev() => setState(() { _dishIndex = (_dishIndex - 1 + _dishes.length) % _dishes.length; _portions = 1; });
-  void _next() => setState(() { _dishIndex = (_dishIndex + 1) % _dishes.length; _portions = 1; });
+  void _onSearchChanged(String query) {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _localSearchResults = [];
+        _apiSearchResults = [];
+      });
+      return;
+    }
 
-  void _search(String q) {
-    if (q.trim().isEmpty) { setState(() { _searchResults = []; _searchDone = false; }); return; }
-    final r = _dishes.where((d) => d.name.toLowerCase().contains(q.toLowerCase())).toList();
-    setState(() { _searchResults = r; _searchDone = true; });
+    final localMatches = _dishes
+        .where((d) => d.name.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+
+    setState(() {
+      _localSearchResults = localMatches;
+    });
+
+    _searchApiOnline(query);
   }
 
-  Future<void> _addToJournal() async {
-    setState(() => _saving = true);
+  Future<void> _searchApiOnline(String query) async {
+    setState(() => _isApiLoading = true);
+    final url = Uri.parse(
+      'https://fr.openfoodfacts.org/cgi/search.pl?search_terms=${Uri.encodeComponent(query)}&search_simple=1&action=process&json=1&page_size=8'
+    );
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final dish = _dishes[_dishIndex];
-        await FirebaseFirestore.instance.collection('meals').add({
-          'userId':    user.uid,
-          'name':      dish.name,
-          'emoji':     dish.emoji,
-          'portions':  _portions,
-          'calories':  dish.cal * _portions,
-          'glucides':  dish.gluc * _portions,
-          'proteines': dish.prot * _portions,
-          'lipides':   dish.lip * _portions,
-          'mealType':  'repas',
-          'timestamp': FieldValue.serverTimestamp(),
+      final response = await http.get(url);
+      if (response.statusCode == 200 && _searchCtrl.text.isNotEmpty) {
+        final data = json.decode(response.body);
+        final List products = data['products'] ?? [];
+        setState(() {
+          _apiSearchResults = products
+              .where((p) => p['product_name'] != null)
+              .map((p) => _Dish.fromOpenFoodFacts(p))
+              .toList();
         });
-        if (mounted) _showSuccessModal(dish);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-      );
+      debugPrint('Erreur API Search: $e');
     } finally {
-      if (mounted) setState(() => _saving = false);
+      setState(() => _isApiLoading = false);
     }
   }
 
-  void _showSuccessModal(_Dish dish) {
-    showDialog(
-      context: context,
-      barrierColor: const Color(0x883C2878),
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 70, height: 70,
-                decoration: const BoxDecoration(color: _kBgPurple, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: Text(dish.emoji, style: const TextStyle(fontSize: 36)),
-              ),
-              const SizedBox(height: 14),
-              const Text('Repas ajouté !',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kDark)),
-              const SizedBox(height: 8),
-              Text('🍽️ ${dish.name} x$_portions',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kPurple)),
-              const SizedBox(height: 8),
-              const Text('Votre repas a été ajouté à votre journal nutritionnel.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () { Navigator.pop(context); Navigator.pop(context); },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: _kPurple,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Super !', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _scanBarcodeOnlyApi(String barcode) async {
+    setState(() => _isApiLoading = true);
+    final url = Uri.parse('https://fr.openfoodfacts.org/api/v0/product/$barcode.json');
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 1) {
+          final scannedProduct = _Dish.fromOpenFoodFacts(data['product']);
+          _selectProduct(scannedProduct);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Scanner: ${scannedProduct.name} trouvé !'), backgroundColor: _kGreen),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Code-barres non trouvé sur Open Food Facts'), backgroundColor: _kOrange),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Erreur Scanner API: $e');
+    } finally {
+      setState(() => _isApiLoading = false);
+    }
+  }
+
+  void _selectProduct(_Dish dish) {
+    setState(() {
+      _searchCtrl.clear();
+      _localSearchResults = [];
+      _apiSearchResults = [];
+      _portions = 1;
+
+      if (dish.isFromApi) {
+        _scannedApiDish = dish; 
+      } else {
+        _scannedApiDish = null; 
+        _catIndex = 0;
+        _dishIndex = _dishes.indexWhere((d) => d.name == dish.name).clamp(0, _dishes.length - 1);
+      }
+    });
+  }
+
+  void _addToMeal() {
+    final dish = _currentActiveDish;
+    setState(() {
+      final existingIdx = _selectedMeals.indexWhere((m) => m.dish.name == dish.name);
+      if (existingIdx >= 0) {
+        final existing = _selectedMeals[existingIdx];
+        _selectedMeals[existingIdx] = _MealItem(dish: dish, portions: existing.portions + _portions);
+      } else {
+        _selectedMeals.add(_MealItem(dish: dish, portions: _portions));
+      }
+      _portions = 1;
+      _scannedApiDish = null; 
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${dish.name} ajouté au repas'), backgroundColor: _kPurple, behavior: SnackBarBehavior.floating),
     );
+  }
+
+  void _prev() {
+    if (_scannedApiDish != null) {
+      setState(() => _scannedApiDish = null); 
+      return;
+    }
+    if (_filteredDishes.isEmpty) return;
+    setState(() {
+      _dishIndex = (_dishIndex - 1 + _filteredDishes.length) % _filteredDishes.length;
+      _portions = 1;
+    });
+  }
+
+  void _next() {
+    if (_scannedApiDish != null) {
+      setState(() => _scannedApiDish = null); 
+      return;
+    }
+    if (_filteredDishes.isEmpty) return;
+    setState(() {
+      _dishIndex = (_dishIndex + 1) % _filteredDishes.length;
+      _portions = 1;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _kBgScaffold,
       body: Column(
         children: [
-          // ── Sticky Header
+          // ── HEADER ──
           Container(
             color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: SafeArea(
               bottom: false,
               child: Column(
                 children: [
-                  // Top row
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            width: 34, height: 34,
-                            decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
-                            child: const Icon(Icons.chevron_left, color: _kPurple, size: 20),
-                          ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: _kBgScaffold, borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.arrow_back_ios_new, color: _kDark, size: 18),
                         ),
-                        const Spacer(),
-                        RichText(
-                          text: const TextSpan(children: [
-                            TextSpan(text: 'Cuisine', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _kDark)),
-                            WidgetSpan(child: SizedBox(width: 4)),
-                            WidgetSpan(child: _Badge(text: 'MA')),
-                          ]),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'Ajouter un repas',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _kDark),
                         ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () { _tabController.animateTo(1); },
-                          child: Container(
-                            width: 34, height: 34,
-                            decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
-                            child: const Icon(Icons.search, color: _kPurple, size: 18),
-                          ),
+                      ),
+                      if (_selectedMeals.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(color: _kPurple, borderRadius: BorderRadius.circular(20)),
+                          child: Text('${_selectedMeals.length} 🛒', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                  // Tab bar
-                  TabBar(
-                    controller: _tabController,
-                    labelColor: _kPurple,
-                    unselectedLabelColor: const Color(0xFFB0A8D8),
-                    labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                    indicatorColor: _kPurple,
-                    indicatorWeight: 3,
-                    dividerColor: const Color(0xFFF0EBFF),
-                    tabs: const [
-                      Tab(text: 'Plats MA'),
-                      Tab(text: 'Recherche'),
-                      Tab(text: 'Scanner'),
+                  const SizedBox(height: 16),
+                  
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(color: _kBgScaffold, borderRadius: BorderRadius.circular(16)),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            onChanged: _onSearchChanged,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            decoration: const InputDecoration(
+                              hintText: 'Rechercher un plat ou produit API...',
+                              hintStyle: TextStyle(color: Color(0xFFC4BCE0)),
+                              prefixIcon: Icon(Icons.search, color: _kGrey, size: 20),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () {
+                          _scanBarcodeOnlyApi('3017620422003'); 
+                        },
+                        child: Container(
+                          width: 48, height: 48,
+                          decoration: BoxDecoration(color: _kPurple, borderRadius: BorderRadius.circular(16)),
+                          child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 22),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -247,352 +575,233 @@ class _AddMealScreenState extends State<AddMealScreen>
             ),
           ),
 
-          // ── Content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _CuisineTab(
-                  dishIndex: _dishIndex,
-                  portions: _portions,
-                  catIndex: _catIndex,
-                  onPrev: _prev,
-                  onNext: _next,
-                  onPortion: (d) => setState(() => _portions = (_portions + d).clamp(1, 5)),
-                  onCat: (i) => setState(() => _catIndex = i),
-                  onAdd: _saving ? null : _addToJournal,
-                  saving: _saving,
-                ),
-                _SearchTab(
-                  controller: _searchCtrl,
-                  results: _searchResults,
-                  searchDone: _searchDone,
-                  onSearch: _search,
-                  onSelect: (d) {
-                    final idx = _dishes.indexOf(d);
-                    if (idx >= 0) {
-                      setState(() { _dishIndex = idx; _portions = 1; });
-                      _tabController.animateTo(0);
-                    }
-                  },
-                ),
-                const _ScanTab(),
-              ],
+          // ── HORIZONTAL CATEGORIES SLIDER (FIXED PARENTHESIS HERE) ──
+          if (_searchCtrl.text.isEmpty && _scannedApiDish == null)
+            Container(
+              color: Colors.white,
+              height: 44,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _categories.length,
+                itemBuilder: (_, i) {
+                  final active = _catIndex == i;
+                  return GestureDetector(
+                    onTap: () => setState(() { _catIndex = i; _dishIndex = 0; _portions = 1; }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(_categories[i],
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                                color: active ? _kPurple : const Color(0xFFB0A8D8),
+                              )),
+                          if (active)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              width: 16, height: 3,
+                              decoration: BoxDecoration(color: _kPurple, borderRadius: BorderRadius.circular(2)),
+                            )
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
+
+          // ── EXPANDED VIEW ──
+          Expanded(
+            child: _searchCtrl.text.isNotEmpty 
+                ? _buildCombinedSearchView() 
+                : _buildCuisineView(),       
           ),
         ],
       ),
     );
   }
-}
 
-// ──────────────────────────────────────────────
-// TAB: PLATS MA (Carousel)
-// ──────────────────────────────────────────────
-class _CuisineTab extends StatelessWidget {
-  final int dishIndex, portions, catIndex;
-  final VoidCallback onPrev, onNext;
-  final void Function(int) onPortion, onCat;
-  final VoidCallback? onAdd;
-  final bool saving;
-
-  const _CuisineTab({
-    required this.dishIndex, required this.portions, required this.catIndex,
-    required this.onPrev, required this.onNext, required this.onPortion,
-    required this.onCat, required this.onAdd, required this.saving,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dish = _dishes[dishIndex];
-    final leftDish  = _dishes[(dishIndex - 1 + _dishes.length) % _dishes.length];
-    final rightDish = _dishes[(dishIndex + 1) % _dishes.length];
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Category scroll
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
-              itemBuilder: (_, i) {
-                final active = catIndex == i;
-                return GestureDetector(
-                  onTap: () => onCat(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: active ? _kPurple : Colors.white,
-                      border: Border.all(color: active ? _kPurple : const Color(0xFFE8E0FF)),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(_categories[i],
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                        color: active ? Colors.white : _kGrey)),
-                  ),
-                );
-              },
-            ),
+  Widget _buildCombinedSearchView() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_localSearchResults.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 10),
+            child: Text('PLATS CUISINÉS (LOCAL)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _kDark, letterSpacing: 1)),
           ),
+          ..._localSearchResults.map((dish) => _buildSearchRow(dish)),
+          const SizedBox(height: 20),
+        ],
 
-          const SizedBox(height: 8),
-
-          // ── Carousel
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Color(0xFFF0EBFF), Colors.white],
-                begin: Alignment.topCenter, end: Alignment.bottomCenter),
-            ),
-            padding: const EdgeInsets.only(top: 20, bottom: 0),
-            child: Column(
+        if (_apiSearchResults.isNotEmpty || _isApiLoading) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 10),
+            child: Row(
               children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _DishThumb(emoji: leftDish.emoji),
-                        const SizedBox(width: 10),
-                        _DishMain(emoji: dish.emoji),
-                        const SizedBox(width: 10),
-                        _DishThumb(emoji: rightDish.emoji),
-                      ],
-                    ),
-                    // Arrows
-                    Positioned(
-                      left: 12,
-                      child: GestureDetector(
-                        onTap: onPrev,
-                        child: Container(
-                          width: 28, height: 28,
-                          decoration: BoxDecoration(
-                            color: Colors.white, shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 8)],
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text('‹', style: TextStyle(fontSize: 18, color: _kPurple, fontWeight: FontWeight.w900)),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 12,
-                      child: GestureDetector(
-                        onTap: onNext,
-                        child: Container(
-                          width: 28, height: 28,
-                          decoration: BoxDecoration(
-                            color: Colors.white, shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 8)],
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text('›', style: TextStyle(fontSize: 18, color: _kPurple, fontWeight: FontWeight.w900)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // Dots
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(_dishes.length, (i) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                    width: i == dishIndex ? 18 : 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: i == dishIndex ? _kPurple : const Color(0xFFD6CFF7),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  )),
-                ),
-                const SizedBox(height: 14),
+                const Text('PRODUITS EN LIGNE (API)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _kPurple, letterSpacing: 1)),
+                if (_isApiLoading) const Padding(padding: EdgeInsets.only(left: 10), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: _kPurple))),
               ],
             ),
           ),
+          ..._apiSearchResults.map((dish) => _buildSearchRow(dish)),
+        ],
 
-          // ── Dish detail
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-            child: Column(
-              children: [
-                Text(dish.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kDark)),
-                const SizedBox(height: 4),
-                Text(dish.desc,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
-                const SizedBox(height: 14),
+        if (_localSearchResults.isEmpty && _apiSearchResults.isEmpty && !_isApiLoading)
+          const Center(child: Padding(padding: EdgeInsets.only(top: 40), child: Text("Aucun produit trouvé", style: TextStyle(color: _kGrey)))),
+      ],
+    );
+  }
 
-                // Portions
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _PortionBtn(label: '−', onTap: () => onPortion(-1)),
-                    const SizedBox(width: 16),
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(color: _kPurple, borderRadius: BorderRadius.circular(12)),
-                      alignment: Alignment.center,
-                      child: const Text('🍽️', style: TextStyle(fontSize: 22)),
-                    ),
-                    const SizedBox(width: 16),
-                    Column(children: [
-                      Text('$portions', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _kDark)),
-                      const Text('portion(s)', style: TextStyle(fontSize: 12, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
-                    ]),
-                    const SizedBox(width: 16),
-                    _PortionBtn(label: '+', onTap: () => onPortion(1)),
-                  ],
-                ),
-                const SizedBox(height: 16),
+  Widget _buildSearchRow(_Dish dish) {
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: dish.isFromApi && dish.imageUrl.isNotEmpty
+            ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(dish.imageUrl, width: 40, height: 40, fit: BoxFit.cover))
+            : Text(dish.emoji, style: const TextStyle(fontSize: 24)),
+        title: Text(dish.name, style: const TextStyle(fontWeight: FontWeight.bold, color: _kDark, fontSize: 14)),
+        subtitle: Text('${dish.cal} kcal ${dish.isFromApi ? "/ 100g" : ""}', style: const TextStyle(color: _kGrey, fontSize: 12)),
+        trailing: Icon(dish.isFromApi ? Icons.cloud_download : Icons.arrow_forward_ios, color: _kPurple, size: 18),
+        onTap: () => _selectProduct(dish),
+      ),
+    );
+  }
 
-                // Stats 3
-                Row(children: [
-                  Expanded(child: _Stat3Card(icon:'⏱️', label:'Prépa', value: dish.prep, bg: const Color(0xFFF0EBFF), labelColor: _kGrey)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _Stat3Card(icon:'⭐', label:'Niveau', value: dish.level, bg: const Color(0xFFE8FAF5), labelColor: _kGreen, valueColor: dish.levelColor)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _Stat3Card(icon:'🔥', label:'Calories', value: '${dish.cal * portions} Cal', bg: const Color(0xFFFFF4EE), labelColor: _kOrange)),
-                ]),
-                const SizedBox(height: 16),
+  Widget _buildCuisineView() {
+    final dish = _currentActiveDish;
 
-                // Macros
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8F5FF),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      children: [
+        Positioned(
+          top: 100, left: 0, right: 0, bottom: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, -5))],
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 90, left: 24, right: 24, bottom: 120),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Text(dish.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _kDark))),
+                  const SizedBox(height: 6),
+                  Center(child: Text(dish.desc, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: _kGrey, fontWeight: FontWeight.w500, height: 1.4))),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Macronutriments',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kDark)),
-                      const SizedBox(height: 12),
-                      _MacroBar(label: 'Glucides', value: dish.gluc * portions, pct: dish.glucPct, color: _kPurple),
-                      const SizedBox(height: 10),
-                      _MacroBar(label: 'Protéines', value: dish.prot * portions, pct: dish.protPct, color: _kOrange),
-                      const SizedBox(height: 10),
-                      _MacroBar(label: 'Lipides', value: dish.lip * portions, pct: dish.lipPct, color: _kGreen),
+                      _Badge(icon: '⏱', text: dish.prep),
+                      const SizedBox(width: 12),
+                      _Badge(icon: '⚡', text: dish.level, color: dish.levelColor),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // Add button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: onAdd,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: _kPurple,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      elevation: 0,
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(color: const Color(0xFFF5F6FA), borderRadius: BorderRadius.circular(30)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _RoundBtn(icon: Icons.remove, onTap: () => setState(() => _portions = (_portions - 1).clamp(1, 10))),
+                        Text('$_portions portion(s) ${dish.isFromApi ? "(x100g)" : ""}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _kDark)),
+                        _RoundBtn(icon: Icons.add, onTap: () => setState(() => _portions = (_portions + 1).clamp(1, 10))),
+                      ],
                     ),
-                    child: saving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('+ Ajouter au journal', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  const Text('MACRONUTRIMENTS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _kDark, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _MacroCard(icon: '🔥', value: '${dish.cal * _portions}', label: 'Calories'),
+                      _MacroCard(icon: '🌾', value: '${dish.gluc * _portions}g', label: 'Glucides'),
+                      _MacroCard(icon: '🍗', value: '${dish.prot * _portions}g', label: 'Protéines'),
+                      _MacroCard(icon: '🥑', value: '${dish.lip * _portions}g', label: 'Lipides'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('ANALYSE DIABÉTIQUE', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _kDark, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: DiabetesAnalyzer.riskColor(dish.glycemicIndex).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: DiabetesAnalyzer.riskColor(dish.glycemicIndex).withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('${dish.glycemicIndex}', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, height: 1, color: DiabetesAnalyzer.riskColor(dish.glycemicIndex))),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text('Indice Glycémique (IG)\nRisque ${DiabetesAnalyzer.riskLevel(dish.glycemicIndex).toLowerCase()}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kDark, height: 1.2))),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────
-// TAB: RECHERCHE
-// ──────────────────────────────────────────────
-class _SearchTab extends StatelessWidget {
-  final TextEditingController controller;
-  final List<_Dish> results;
-  final bool searchDone;
-  final void Function(String) onSearch;
-  final void Function(_Dish) onSelect;
-
-  const _SearchTab({
-    required this.controller, required this.results,
-    required this.searchDone, required this.onSearch, required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Search bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+        ),
+        Positioned(
+          top: 0, left: 0, right: 0,
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  onChanged: onSearch,
-                  onSubmitted: onSearch,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _kDark),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search, color: _kGrey, size: 18),
-                    hintText: 'Ex: Harira, Tajine, Nutella...',
-                    hintStyle: const TextStyle(color: Color(0xFFC4BCE0)),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE8E0FF), width: 2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE8E0FF), width: 2),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: _kPurple, width: 2),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  ),
+              GestureDetector(
+                onTap: _prev,
+                child: Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]), child: const Icon(Icons.chevron_left, color: _kDark)),
+              ),
+              const SizedBox(width: 20),
+              Container(
+                width: 170, height: 170,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 30, offset: const Offset(0, 15))]),
+                child: ClipOval(
+                  child: dish.isFromApi && dish.imageUrl.isNotEmpty
+                      ? Image.network(dish.imageUrl, fit: BoxFit.cover)
+                      : Image.asset(dish.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: _kBgPurple, child: Center(child: Text(dish.emoji, style: const TextStyle(fontSize: 60))))),
                 ),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () => onSearch(controller.text),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                  backgroundColor: _kPurple,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: const Text('Chercher', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              const SizedBox(width: 20),
+              GestureDetector(
+                onTap: _next,
+                child: Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]), child: const Icon(Icons.chevron_right, color: _kDark)),
               ),
             ],
           ),
         ),
-
-        // Results or hint
-        Expanded(
-          child: !searchDone
-              ? const _SearchHint(
-                  icon: '🔍',
-                  text: 'Recherchez un plat marocain ou un produit alimentaire pour voir ses informations nutritionnelles',
-                )
-              : results.isEmpty
-                  ? const _SearchHint(icon: '😕', text: 'Aucun résultat trouvé')
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: results.length,
-                      itemBuilder: (_, i) => _ResultCard(dish: results[i], onTap: () => onSelect(results[i])),
-                    ),
+        Positioned(
+          bottom: 0, left: 0, right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 30),
+            decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, -5))]),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _addToMeal,
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18), backgroundColor: _kPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 0),
+                    child: const Text('Ajouter au repas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -600,314 +809,47 @@ class _SearchTab extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────
-// TAB: SCANNER
+// COMPOSANTS AUXILIAIRES
 // ──────────────────────────────────────────────
-class _ScanTab extends StatelessWidget {
-  const _ScanTab();
-
+class _Badge extends StatelessWidget {
+  final String icon, text;
+  final Color? color;
+  const _Badge({required this.icon, required this.text, this.color});
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Scan viewfinder
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            height: 240,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const Positioned(
-                  top: 16, left: 0, right: 0,
-                  child: Text('Pointez vers un code-barres',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700)),
-                ),
-                // Viewfinder corners
-                SizedBox(
-                  width: 160, height: 160,
-                  child: CustomPaint(painter: _ViewfinderPainter()),
-                ),
-                // Scan line animation
-                const _ScanLine(),
-                Positioned(
-                  bottom: 14,
-                  child: Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white24, shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text('⚡', style: TextStyle(fontSize: 20)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Hint card
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFF0EBFF)),
-            ),
-            child: Column(
-              children: const [
-                Text('📦', style: TextStyle(fontSize: 32)),
-                SizedBox(height: 8),
-                Text(
-                  'Scannez le code-barres d\'un produit alimentaire pour voir ses informations nutritionnelles automatiquement',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: _kGrey, fontWeight: FontWeight.w600, height: 1.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(color: color?.withOpacity(0.1) ?? const Color(0xFFF0EBFF), borderRadius: BorderRadius.circular(20)),
+      child: Row(children: [Text(icon), const SizedBox(width: 6), Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color ?? _kPurple))]),
     );
   }
 }
 
-// ──────────────────────────────────────────────
-// SOUS-WIDGETS
-// ──────────────────────────────────────────────
-class _Badge extends StatelessWidget {
-  final String text;
-  const _Badge({required this.text});
-  @override Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(6)),
-    child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kPurple2)),
-  );
-}
-
-class _DishThumb extends StatelessWidget {
-  final String emoji;
-  const _DishThumb({required this.emoji});
-  @override Widget build(BuildContext context) => Container(
-    width: 70, height: 70,
-    decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
-    alignment: Alignment.center,
-    child: Opacity(opacity: 0.55, child: Text(emoji, style: const TextStyle(fontSize: 32))),
-  );
-}
-
-class _DishMain extends StatelessWidget {
-  final String emoji;
-  const _DishMain({required this.emoji});
-  @override Widget build(BuildContext context) => Container(
-    width: 110, height: 110,
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.95), shape: BoxShape.circle,
-      boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.15), blurRadius: 32, offset: const Offset(0, 8))],
-    ),
-    alignment: Alignment.center,
-    child: Text(emoji, style: const TextStyle(fontSize: 52)),
-  );
-}
-
-class _PortionBtn extends StatelessWidget {
-  final String label;
+class _RoundBtn extends StatelessWidget {
+  final IconData icon;
   final VoidCallback onTap;
-  const _PortionBtn({required this.label, required this.onTap});
-  @override Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 36, height: 36,
-      decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(10)),
-      alignment: Alignment.center,
-      child: Text(label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _kPurple)),
-    ),
-  );
+  const _RoundBtn({required this.icon, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(width: 40, height: 40, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(icon, color: _kDark, size: 20)),
+    );
+  }
 }
 
-class _Stat3Card extends StatelessWidget {
-  final String icon, label, value;
-  final Color bg, labelColor;
-  final Color? valueColor;
-  const _Stat3Card({required this.icon, required this.label, required this.value,
-    required this.bg, required this.labelColor, this.valueColor});
-  @override Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
-    child: Column(children: [
-      Text(icon, style: const TextStyle(fontSize: 18)),
-      const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: labelColor)),
-      const SizedBox(height: 2),
-      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: valueColor ?? _kDark)),
-    ]),
-  );
-}
-
-class _MacroBar extends StatelessWidget {
-  final String label;
-  final int value, pct;
-  final Color color;
-  const _MacroBar({required this.label, required this.value, required this.pct, required this.color});
-  @override Widget build(BuildContext context) => Row(children: [
-    SizedBox(width: 70, child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
-    Expanded(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: LinearProgressIndicator(
-          value: pct / 100,
-          minHeight: 7,
-          backgroundColor: const Color(0xFFE8E0FF),
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-        ),
+class _MacroCard extends StatelessWidget {
+  final String icon, value, label;
+  const _MacroCard({required this.icon, required this.value, required this.label});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF0F1F5))),
+        child: Column(children: [Text(icon, style: const TextStyle(fontSize: 22)), const SizedBox(height: 10), Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _kDark)), const SizedBox(height: 4), Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kGrey))]),
       ),
-    ),
-    const SizedBox(width: 8),
-    SizedBox(width: 60, child: Text('$pct% · ${value}g',
-      textAlign: TextAlign.right,
-      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kGrey))),
-  ]);
-}
-
-class _SearchHint extends StatelessWidget {
-  final String icon, text;
-  const _SearchHint({required this.icon, required this.text});
-  @override Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(icon, style: const TextStyle(fontSize: 48)),
-        const SizedBox(height: 12),
-        Text(text, textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600, height: 1.5)),
-      ]),
-    ),
-  );
-}
-
-class _ResultCard extends StatelessWidget {
-  final _Dish dish;
-  final VoidCallback onTap;
-  const _ResultCard({required this.dish, required this.onTap});
-
-  String _nsLabel() {
-    if (dish.cal < 200) return 'A';
-    if (dish.cal < 400) return 'B';
-    if (dish.cal < 550) return 'C';
-    return 'D';
+    );
   }
-  Color _nsColor() {
-    switch (_nsLabel()) {
-      case 'A': return const Color(0xFF1E8F4E);
-      case 'B': return const Color(0xFF88B931);
-      case 'C': return const Color(0xFFF0C30F);
-      default:  return const Color(0xFFE77D25);
-    }
-  }
-
-  @override Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF0EBFF)),
-        boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(children: [
-        Container(
-          width: 60, height: 60,
-          decoration: BoxDecoration(color: _kBgPurple, borderRadius: BorderRadius.circular(14)),
-          alignment: Alignment.center,
-          child: Text(dish.emoji, style: const TextStyle(fontSize: 28)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(dish.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kDark)),
-          const Text('Cuisine Marocaine', style: TextStyle(fontSize: 11, color: Color(0xFFB0A8D8), fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Wrap(spacing: 5, runSpacing: 4, children: [
-            _Chip(text: '🔥 ${dish.cal} kcal', bg: const Color(0xFFE8F8F2), color: _kGreen),
-            _Chip(text: '🌾 ${dish.gluc}g gluc', bg: const Color(0xFFFFFBE8), color: const Color(0xFFB7860B)),
-          ]),
-        ])),
-        const SizedBox(width: 8),
-        Container(
-          width: 32, height: 32,
-          decoration: BoxDecoration(color: _nsColor(), borderRadius: BorderRadius.circular(8)),
-          alignment: Alignment.center,
-          child: Text(_nsLabel(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
-        ),
-      ]),
-    ),
-  );
-}
-
-class _Chip extends StatelessWidget {
-  final String text;
-  final Color bg, color;
-  const _Chip({required this.text, required this.bg, required this.color});
-  @override Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-    child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
-  );
-}
-
-// ──────────────────────────────────────────────
-// SCAN PAINTERS
-// ──────────────────────────────────────────────
-class _ViewfinderPainter extends CustomPainter {
-  @override void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3..strokeCap = StrokeCap.round;
-    const r = 4.0; const s = 22.0;
-    // TL
-    canvas.drawLine(Offset(r, 0), Offset(s, 0), p);
-    canvas.drawLine(Offset(0, r), Offset(0, s), p);
-    // TR
-    canvas.drawLine(Offset(size.width - s, 0), Offset(size.width - r, 0), p);
-    canvas.drawLine(Offset(size.width, r), Offset(size.width, s), p);
-    // BL
-    canvas.drawLine(Offset(r, size.height), Offset(s, size.height), p);
-    canvas.drawLine(Offset(0, size.height - s), Offset(0, size.height - r), p);
-    // BR
-    canvas.drawLine(Offset(size.width - s, size.height), Offset(size.width - r, size.height), p);
-    canvas.drawLine(Offset(size.width, size.height - s), Offset(size.width, size.height - r), p);
-  }
-  @override bool shouldRepaint(_) => false;
-}
-
-class _ScanLine extends StatefulWidget {
-  const _ScanLine();
-  @override State<_ScanLine> createState() => _ScanLineState();
-}
-class _ScanLineState extends State<_ScanLine> with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-  @override void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.2, end: 0.8).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-  @override void dispose() { _ctrl.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _anim,
-    builder: (_, __) => Positioned(
-      top: 160 * _anim.value,
-      left: 40, right: 40,
-      child: Container(height: 2,
-        decoration: BoxDecoration(
-          color: _kPurple.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(2),
-          boxShadow: [BoxShadow(color: _kPurple.withOpacity(0.4), blurRadius: 6)],
-        )),
-    ),
-  );
 }
