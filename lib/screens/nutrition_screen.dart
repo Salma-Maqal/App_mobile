@@ -2,17 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_meal_screen.dart';
-
-// ─────────────────────────────────────────────
-// COULEURS
-// ─────────────────────────────────────────────
-const _kPurple  = Color(0xFF6C5CE7);
-const _kPurple2 = Color(0xFFA29BFE);
-const _kOrange  = Color(0xFFFF9F43);
-const _kGreen   = Color(0xFF10AC84);
-const _kDark    = Color(0xFF222F3E);
-const _kTextMuted = Color(0xFF8395A7);
-const _kBg      = Color(0xFFF4F6FB); 
+import '../app_colors.dart';
 
 // ─────────────────────────────────────────────
 // MODÈLE
@@ -27,35 +17,34 @@ class _MealSlot {
     required this.imagePath,
     required this.name,
     required this.mealType,
-    required this.recommended, // Paramètre requis
+    required this.recommended,
   });
 }
 
-// ✅ FIX : Ajout du champ 'recommended' manquant sur la ligne du 'Snack'
 const _slots = [
   _MealSlot(
     imagePath: 'assets/typeRepas/breakfast.jpg',
-    name: 'Breakfast',
+    name: 'Petit-déjeuner',
     mealType: 'petit-dejeuner',
-    recommended: 'Recommended 830–1170 Cal',
+    recommended: 'Recommandé 830–1170 Cal',
   ),
   _MealSlot(
     imagePath: 'assets/typeRepas/lunch.jpg',
-    name: 'Lunch',
+    name: 'Déjeuner',
     mealType: 'dejeuner',
-    recommended: 'Recommended 255–370 Cal',
+    recommended: 'Recommandé 255–370 Cal',
   ),
   _MealSlot(
     imagePath: 'assets/typeRepas/snack.jpg',
-    name: 'Snack',
+    name: 'Collation',
     mealType: 'collation',
-    recommended: 'Recommended 150–250 Cal', // Fixé ici !
+    recommended: 'Recommandé 150–250 Cal',
   ),
   _MealSlot(
     imagePath: 'assets/typeRepas/dinner2.jpg',
-    name: 'Dinner',
+    name: 'Dîner',
     mealType: 'diner',
-    recommended: 'Recommended 255–370 Cal',
+    recommended: 'Recommandé 255–370 Cal',
   ),
 ];
 
@@ -131,7 +120,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -140,10 +129,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
             if (_totalCalories > 0) _buildCalorieBanner(),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: _kPurple))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                   : RefreshIndicator(
-                      color: _kPurple,
-                      backgroundColor: Colors.white,
+                      color: AppColors.primary,
+                      backgroundColor: AppColors.white,
                       onRefresh: _loadToday,
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
@@ -169,13 +158,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
           children: [
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Icon(Icons.arrow_back, color: _kDark, size: 26),
+              child: Icon(Icons.arrow_back, color: AppColors.textDark, size: 26),
             ),
             const Expanded(
               child: Text(
                 'Nutrition',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kDark),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
             ),
             const SizedBox(width: 26),
@@ -188,7 +177,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
         ),
@@ -198,8 +187,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
             const Text('🔥', style: TextStyle(fontSize: 18)),
             const SizedBox(width: 10),
             Text(
-              '$_totalCalories Cal consumed today',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kDark),
+              '$_totalCalories Cal consommées aujourd\'hui',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textDark),
             ),
           ],
         ),
@@ -226,7 +215,7 @@ class _MealSlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -254,17 +243,17 @@ class _MealSlotCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
-                            color: _kDark,
+                            color: AppColors.textDark,
                             letterSpacing: -0.5,
                       ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          entries.isEmpty ? slot.recommended : '$_totalCal Cal consumed',
+                          entries.isEmpty ? slot.recommended : '$_totalCal Cal consommées',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: _kTextMuted,
+                            color: AppColors.textGrey,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -273,19 +262,19 @@ class _MealSlotCard extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
                             decoration: BoxDecoration(
-                              color: _kPurple,
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: [
                                 BoxShadow(
-                                  color: _kPurple.withOpacity(0.2),
+                                  color: AppColors.primary.withOpacity(0.2),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
                                 )
                               ],
                             ),
                             child: const Text(
-                              '+ Add',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                              '+ Ajouter',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.white),
                             ),
                           ),
                         ),
@@ -318,7 +307,7 @@ class _MealSlotCard extends StatelessWidget {
           if (entries.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Divider(height: 1, color: Colors.grey.shade100, thickness: 1.5),
+              child: Divider(height: 1, color: AppColors.bg, thickness: 1.5),
             ),
             Column(
               children: entries.map((e) => _EntryRow(entry: e)).toList(),
@@ -341,7 +330,7 @@ class _EntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emoji    = (entry['emoji']     as String?) ?? '🍽️';
-    final name     = (entry['name']      as String?) ?? 'Meal';
+    final name     = (entry['name']      as String?) ?? 'Repas';
     final portions = (entry['portions']  as num?)?.toInt() ?? 1;
     final cal      = (entry['calories']  as num?)?.toInt() ?? 0;
     final gluc     = (entry['glucides']  as num?)?.toInt() ?? 0;
@@ -361,23 +350,23 @@ class _EntryRow extends StatelessWidget {
                   '$name × $portions',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kDark),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
                 ),
               ),
               Text(
                 '$cal kcal',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kDark),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              _MiniMacro(label: 'C', value: gluc, color: _kPurple),
+              _MiniMacro(label: 'Glucides', value: gluc, color: AppColors.primary),
               const SizedBox(width: 6),
-              _MiniMacro(label: 'P', value: prot, color: _kOrange),
+              _MiniMacro(label: 'Protéines', value: prot, color: AppColors.warning),
               const SizedBox(width: 6),
-              _MiniMacro(label: 'F', value: lip,  color: _kGreen),
+              _MiniMacro(label: 'Lipides', value: lip, color: AppColors.sport),
             ],
           ),
         ],
@@ -397,7 +386,7 @@ class _MiniMacro extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
