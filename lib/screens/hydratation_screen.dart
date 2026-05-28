@@ -549,4 +549,4 @@ class _BottlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BottlePainter old) => old.progress != progress;
-}
+// }
