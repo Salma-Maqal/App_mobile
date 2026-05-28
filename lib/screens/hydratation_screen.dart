@@ -237,7 +237,7 @@ class _HydratationScreenState extends State<HydratationScreen> {
                             ],
                           ),
                         ),
-                        // Bottle SVG-like widget
+                        // Bottle widget
                         _WaterBottle(progress: _progress),
                       ],
                     ),
@@ -549,4 +549,4 @@ class _BottlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BottlePainter old) => old.progress != progress;
-// }
+}
