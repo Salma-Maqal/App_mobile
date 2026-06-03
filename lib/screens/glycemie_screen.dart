@@ -241,7 +241,6 @@ class _GlycemieScreenState extends State<GlycemieScreen>
           if (_showNotifPanel) _buildNotifPanel(),
         ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
