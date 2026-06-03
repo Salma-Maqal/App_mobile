@@ -102,7 +102,7 @@ class CalmSugarApp extends StatelessWidget {
         '/sport':            (_) => const SportScreen(),
         '/glycemie':         (_) => const GlycemieScreen(),
         '/hydratation':      (_) => const HydratationScreen(),
-        '/historique':       (_) => const HistoriqueScreen(),
+       // '/historique':       (_) => const HistoriqueScreen(),
       },
     );
   }

@@ -67,4 +67,5 @@ class AppColors {
   static const error = softRed;
   static const warning = amber;
   static const success = emerald;
+  
 }

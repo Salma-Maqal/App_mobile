@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '/diabetes_analyzer.dart';
-import '../app_colors.dart'; // Import de la palette Medical Premium
+import '../app_colors.dart';
 
 // ──────────────────────────────────────────────
 // MODÈLE PLAT
@@ -68,7 +68,7 @@ class _MealItem {
 }
 
 // ──────────────────────────────────────────────
-// DONNÉES DES PLATS (avec couleurs adaptées)
+// DONNÉES DES PLATS
 // ──────────────────────────────────────────────
 const _dishes = [
   // ==================== SALADES ====================
@@ -317,15 +317,17 @@ const _categories = [
 // ──────────────────────────────────────────────
 class AddMealScreen extends StatefulWidget {
   const AddMealScreen({super.key});
-  @override State<AddMealScreen> createState() => _AddMealScreenState();
+
+  @override
+  State<AddMealScreen> createState() => _AddMealScreenState();
 }
 
 class _AddMealScreenState extends State<AddMealScreen> {
   int _dishIndex = 0;
-  int _portions  = 1;
-  int _catIndex  = 0;
+  int _portions = 1;
+  int _catIndex = 0;
   bool _isApiLoading = false;
-
+  
   _Dish? _scannedApiDish;
 
   final List<_MealItem> _selectedMeals = [];
@@ -350,6 +352,228 @@ class _AddMealScreenState extends State<AddMealScreen> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  // ──────────────────────────────────────────────
+  // MODAL D'HYDRATATION
+  // ──────────────────────────────────────────────
+  void _showHydrationModal() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('hydration')
+              .where('userId', isEqualTo: user.uid)
+              .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(
+                  DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
+              .snapshots(),
+          builder: (context, snapshot) {
+            int totalMl = 0;
+            int glassesCount = 0;
+            const int targetMl = 2000;
+            const int mlPerGlass = 250;
+            
+            if (snapshot.hasData) {
+              for (var doc in snapshot.data!.docs) {
+                totalMl += (doc['amount'] as int? ?? 0);
+                glassesCount++;
+              }
+            }
+            
+            final targetGlasses = targetMl ~/ mlPerGlass;
+            final percentage = (totalMl / targetMl).clamp(0.0, 1.0);
+            
+            return Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textGrey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  Icon(Icons.water_drop, size: 50, color: AppColors.water),
+                  const SizedBox(height: 10),
+                  Text(
+                    '$glassesCount of $targetGlasses glasses consumed',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textGrey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(totalMl / 1000).toStringAsFixed(1)}L / ${(targetMl / 1000).toStringAsFixed(1)}L',
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.primary),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: percentage,
+                      minHeight: 8,
+                      backgroundColor: AppColors.bg,
+                      color: percentage >= 1 ? AppColors.success : AppColors.water,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(targetGlasses, (index) {
+                      final isConsumed = index < glassesCount;
+                      return GestureDetector(
+                        onTap: () async {
+                          if (!isConsumed) {
+                            await FirebaseFirestore.instance.collection('hydration').add({
+                              'userId': user.uid,
+                              'amount': mlPerGlass,
+                              'timestamp': FieldValue.serverTimestamp(),
+                            });
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('💧 +250ml d\'eau ajouté'),
+                                  backgroundColor: AppColors.water,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Column(
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isConsumed ? AppColors.water.withOpacity(0.15) : AppColors.bg,
+                                border: Border.all(
+                                  color: isConsumed ? AppColors.water : AppColors.textGrey.withOpacity(0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  if (!isConsumed)
+                                    Icon(Icons.water_drop, size: 28, color: AppColors.textGrey.withOpacity(0.5)),
+                                  if (isConsumed)
+                                    const Icon(Icons.check_circle, size: 32, color: AppColors.water),
+                                  if (isConsumed)
+                                    Positioned.fill(
+                                      child: CircularProgressIndicator(
+                                        value: 1.0,
+                                        strokeWidth: 3,
+                                        backgroundColor: Colors.transparent,
+                                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.water),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${mlPerGlass}ml',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isConsumed ? AppColors.water : AppColors.textGrey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  if (glassesCount > 0)
+                    TextButton.icon(
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            title: const Text('Réinitialiser', style: TextStyle(fontWeight: FontWeight.bold)),
+                            content: const Text('Voulez-vous vraiment réinitialiser votre consommation d\'eau ?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Annuler', style: TextStyle(color: AppColors.textGrey)),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Oui', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                        
+                        if (confirm == true) {
+                          final now = DateTime.now();
+                          final start = DateTime(now.year, now.month, now.day);
+                          final end = start.add(const Duration(days: 1));
+                          
+                          final snapshot = await FirebaseFirestore.instance
+                              .collection('hydration')
+                              .where('userId', isEqualTo: user.uid)
+                              .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                              .where('timestamp', isLessThan: Timestamp.fromDate(end))
+                              .get();
+                          
+                          final batch = FirebaseFirestore.instance.batch();
+                          for (var doc in snapshot.docs) {
+                            batch.delete(doc.reference);
+                          }
+                          await batch.commit();
+                          
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Consommation d\'eau réinitialisée'),
+                                backgroundColor: AppColors.warning,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: Icon(Icons.refresh, size: 18, color: AppColors.warning),
+                      label: const Text('Réinitialiser', style: TextStyle(color: AppColors.warning)),
+                    ),
+                  
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _onSearchChanged(String query) {
@@ -442,23 +666,56 @@ class _AddMealScreenState extends State<AddMealScreen> {
     });
   }
 
-  void _addToMeal() {
-    final dish = _currentActiveDish;
-    setState(() {
-      final existingIdx = _selectedMeals.indexWhere((m) => m.dish.name == dish.name);
-      if (existingIdx >= 0) {
-        final existing = _selectedMeals[existingIdx];
-        _selectedMeals[existingIdx] = _MealItem(dish: dish, portions: existing.portions + _portions);
-      } else {
-        _selectedMeals.add(_MealItem(dish: dish, portions: _portions));
-      }
-      _portions = 1;
-      _scannedApiDish = null; 
-    });
+  Future<void> _addToMeal() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez vous connecter'), backgroundColor: AppColors.error),
+      );
+      return;
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${dish.name} ajouté au repas'), backgroundColor: AppColors.primary, behavior: SnackBarBehavior.floating),
-    );
+    final dish = _currentActiveDish;
+    
+    try {
+      await FirebaseFirestore.instance.collection('meals').add({
+        'userId': user.uid,
+        'name': dish.name,
+        'emoji': dish.emoji,
+        'calories': dish.cal * _portions,
+        'glucides': dish.gluc * _portions,
+        'proteines': dish.prot * _portions,
+        'lipides': dish.lip * _portions,
+        'portions': _portions,
+        'glycemicIndex': dish.glycemicIndex,
+        'timestamp': Timestamp.now(),
+        'imageUrl': dish.imageUrl,
+      });
+      
+      setState(() {
+        final existingIdx = _selectedMeals.indexWhere((m) => m.dish.name == dish.name);
+        if (existingIdx >= 0) {
+          final existing = _selectedMeals[existingIdx];
+          _selectedMeals[existingIdx] = _MealItem(dish: dish, portions: existing.portions + _portions);
+        } else {
+          _selectedMeals.add(_MealItem(dish: dish, portions: _portions));
+        }
+        _portions = 1;
+        _scannedApiDish = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${dish.name} ajouté au repas'),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+      );
+    }
   }
 
   void _prev() {
@@ -516,12 +773,17 @@ class _AddMealScreenState extends State<AddMealScreen> {
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textDark),
                         ),
                       ),
-                      if (_selectedMeals.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
-                          child: Text('${_selectedMeals.length} 🛒', style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
+                      GestureDetector(
+                        onTap: _showHydrationModal,
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.water.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.water_drop, color: AppColors.water, size: 22),
                         ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),

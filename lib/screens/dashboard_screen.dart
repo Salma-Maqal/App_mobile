@@ -181,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onGoNutrition: () => setState(() => _currentIndex = 1),
     ),
     const NutritionScreen(),
-    const _HistoryTab(),
+ // const _HistoryTab(),
     _ProfileTab(
       userName: _userName,
       userEmail: _userEmail,
@@ -664,12 +664,12 @@ class _ActionCard extends StatelessWidget {
 // ─────────────────────────────────────────
 // 📊 History Tab
 // ─────────────────────────────────────────
-class _HistoryTab extends StatelessWidget {
+/*class _HistoryTab extends StatelessWidget {
   const _HistoryTab();
 
   @override
   Widget build(BuildContext context) => const HistoriqueScreen();
-}
+}*/
 
 // ─────────────────────────────────────────
 // 👤 Profile Tab
