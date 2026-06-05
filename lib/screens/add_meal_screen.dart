@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '/diabetes_analyzer.dart';
 import '../app_colors.dart';
+import '../screens/hydratation_model.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 // ──────────────────────────────────────────────
 // MODÈLE PLAT
@@ -347,7 +349,41 @@ class _AddMealScreenState extends State<AddMealScreen> {
     final cat = _categories[_catIndex];
     return _dishes.where((d) => d.category == cat).toList();
   }
+@override
+void initState() {
+  super.initState();
+  _checkAuthStatus();
+}
 
+Future<void> _checkAuthStatus() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    print('⚠️ Aucun utilisateur connecté');
+    // Connexion anonyme automatique
+    await _signInAnonymously();
+  } else {
+    print('✅ Utilisateur connecté: ${user.uid}');
+  }
+}
+
+Future<void> _signInAnonymously() async {
+  try {
+    final userCredential = await FirebaseAuth.instance.signInAnonymously();
+    print('✅ Connexion anonyme réussie: ${userCredential.user?.uid}');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mode invité actif - vos repas seront sauvegardés'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  } catch (e) {
+    print('❌ Erreur connexion anonyme: $e');
+  }
+}
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -358,222 +394,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
   // MODAL D'HYDRATATION
   // ──────────────────────────────────────────────
   void _showHydrationModal() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('hydration')
-              .where('userId', isEqualTo: user.uid)
-              .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(
-                  DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
-              .snapshots(),
-          builder: (context, snapshot) {
-            int totalMl = 0;
-            int glassesCount = 0;
-            const int targetMl = 2000;
-            const int mlPerGlass = 250;
-            
-            if (snapshot.hasData) {
-              for (var doc in snapshot.data!.docs) {
-                totalMl += (doc['amount'] as int? ?? 0);
-                glassesCount++;
-              }
-            }
-            
-            final targetGlasses = targetMl ~/ mlPerGlass;
-            final percentage = (totalMl / targetMl).clamp(0.0, 1.0);
-            
-            return Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.textGrey.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  Icon(Icons.water_drop, size: 50, color: AppColors.water),
-                  const SizedBox(height: 10),
-                  Text(
-                    '$glassesCount of $targetGlasses glasses consumed',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${(totalMl / 1000).toStringAsFixed(1)}L / ${(targetMl / 1000).toStringAsFixed(1)}L',
-                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.primary),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: percentage,
-                      minHeight: 8,
-                      backgroundColor: AppColors.bg,
-                      color: percentage >= 1 ? AppColors.success : AppColors.water,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  Wrap(
-                    spacing: 20,
-                    runSpacing: 20,
-                    alignment: WrapAlignment.center,
-                    children: List.generate(targetGlasses, (index) {
-                      final isConsumed = index < glassesCount;
-                      return GestureDetector(
-                        onTap: () async {
-                          if (!isConsumed) {
-                            await FirebaseFirestore.instance.collection('hydration').add({
-                              'userId': user.uid,
-                              'amount': mlPerGlass,
-                              'timestamp': FieldValue.serverTimestamp(),
-                            });
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('💧 +250ml d\'eau ajouté'),
-                                  backgroundColor: AppColors.water,
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: Column(
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isConsumed ? AppColors.water.withOpacity(0.15) : AppColors.bg,
-                                border: Border.all(
-                                  color: isConsumed ? AppColors.water : AppColors.textGrey.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  if (!isConsumed)
-                                    Icon(Icons.water_drop, size: 28, color: AppColors.textGrey.withOpacity(0.5)),
-                                  if (isConsumed)
-                                    const Icon(Icons.check_circle, size: 32, color: AppColors.water),
-                                  if (isConsumed)
-                                    Positioned.fill(
-                                      child: CircularProgressIndicator(
-                                        value: 1.0,
-                                        strokeWidth: 3,
-                                        backgroundColor: Colors.transparent,
-                                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.water),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${mlPerGlass}ml',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isConsumed ? AppColors.water : AppColors.textGrey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  if (glassesCount > 0)
-                    TextButton.icon(
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                            title: const Text('Réinitialiser', style: TextStyle(fontWeight: FontWeight.bold)),
-                            content: const Text('Voulez-vous vraiment réinitialiser votre consommation d\'eau ?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Annuler', style: TextStyle(color: AppColors.textGrey)),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Oui', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                        );
-                        
-                        if (confirm == true) {
-                          final now = DateTime.now();
-                          final start = DateTime(now.year, now.month, now.day);
-                          final end = start.add(const Duration(days: 1));
-                          
-                          final snapshot = await FirebaseFirestore.instance
-                              .collection('hydration')
-                              .where('userId', isEqualTo: user.uid)
-                              .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-                              .where('timestamp', isLessThan: Timestamp.fromDate(end))
-                              .get();
-                          
-                          final batch = FirebaseFirestore.instance.batch();
-                          for (var doc in snapshot.docs) {
-                            batch.delete(doc.reference);
-                          }
-                          await batch.commit();
-                          
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Consommation d\'eau réinitialisée'),
-                                backgroundColor: AppColors.warning,
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      icon: Icon(Icons.refresh, size: 18, color: AppColors.warning),
-                      label: const Text('Réinitialiser', style: TextStyle(color: AppColors.warning)),
-                    ),
-                  
-                  const SizedBox(height: 16),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+    HydrationModal.show(context);
   }
 
   void _onSearchChanged(String query) {
@@ -621,34 +442,89 @@ class _AddMealScreenState extends State<AddMealScreen> {
     }
   }
 
-  Future<void> _scanBarcodeOnlyApi(String barcode) async {
-    setState(() => _isApiLoading = true);
-    final url = Uri.parse('https://fr.openfoodfacts.org/api/v0/product/$barcode.json');
+Future<void> _scanBarcodeOnlyApi() async {
+  String? scannedBarcode;
 
-    try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 1) {
-          final scannedProduct = _Dish.fromOpenFoodFacts(data['product']);
-          _selectProduct(scannedProduct);
-          
+  await showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (BuildContext context) {
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: Colors.black,
+        child: SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: _BarcodeScannerWidget(
+            onBarcodeScanned: (barcode) {
+              scannedBarcode = barcode;
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      );
+    },
+  );
+
+  if (scannedBarcode == null || scannedBarcode!.isEmpty) {
+    return;
+  }
+
+  setState(() => _isApiLoading = true);
+
+  final url = Uri.parse(
+    'https://fr.openfoodfacts.org/api/v0/product/$scannedBarcode.json',
+  );
+
+  try {
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+
+      if (data['status'] == 1) {
+        final scannedProduct = _Dish.fromOpenFoodFacts(data['product']);
+
+        _selectProduct(scannedProduct);
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Scanner: ${scannedProduct.name} trouvé !'), backgroundColor: AppColors.success),
+            SnackBar(
+              content: Text('✅ ${scannedProduct.name} trouvé !'),
+              backgroundColor: AppColors.success,
+            ),
           );
-        } else {
+        }
+      } else {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Code-barres non trouvé sur Open Food Facts'), backgroundColor: AppColors.warning),
+            const SnackBar(
+              content: Text(
+                '❌ Code-barres non trouvé sur Open Food Facts',
+              ),
+              backgroundColor: AppColors.warning,
+            ),
           );
         }
       }
-    } catch (e) {
-      debugPrint('Erreur Scanner API: $e');
-    } finally {
+    }
+  } catch (e) {
+    debugPrint('Erreur Scanner API: $e');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
       setState(() => _isApiLoading = false);
     }
   }
-
+}
   void _selectProduct(_Dish dish) {
     setState(() {
       _searchCtrl.clear();
@@ -666,32 +542,59 @@ class _AddMealScreenState extends State<AddMealScreen> {
     });
   }
 
-  Future<void> _addToMeal() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez vous connecter'), backgroundColor: AppColors.error),
-      );
+Future<void> _addToMeal() async {
+  // Vérifier l'authentification
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    print('❌ Tentative d\'ajout sans utilisateur connecté');
+    
+    // Essayer une connexion anonyme automatique
+    await _signInAnonymously();
+    final newUser = FirebaseAuth.instance.currentUser;
+    
+    if (newUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Impossible de sauvegarder: veuillez réessayer'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       return;
     }
-
-    final dish = _currentActiveDish;
+  }
+  
+  print('✅ Utilisateur connecté: ${FirebaseAuth.instance.currentUser?.uid}');
+  
+  final dish = _currentActiveDish;
+  
+  try {
+    final mealData = {
+      'userId': FirebaseAuth.instance.currentUser!.uid,
+      'name': dish.name,
+      'emoji': dish.emoji,
+      'calories': dish.cal * _portions,
+      'glucides': dish.gluc * _portions,
+      'proteines': dish.prot * _portions,
+      'lipides': dish.lip * _portions,
+      'portions': _portions,
+      'glycemicIndex': dish.glycemicIndex,
+      'timestamp': FieldValue.serverTimestamp(),
+      'imageUrl': dish.imageUrl,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
     
-    try {
-      await FirebaseFirestore.instance.collection('meals').add({
-        'userId': user.uid,
-        'name': dish.name,
-        'emoji': dish.emoji,
-        'calories': dish.cal * _portions,
-        'glucides': dish.gluc * _portions,
-        'proteines': dish.prot * _portions,
-        'lipides': dish.lip * _portions,
-        'portions': _portions,
-        'glycemicIndex': dish.glycemicIndex,
-        'timestamp': Timestamp.now(),
-        'imageUrl': dish.imageUrl,
-      });
-      
+    print('📝 Tentative d\'ajout: ${dish.name}');
+    print('📊 Données: $mealData');
+    
+    final docRef = await FirebaseFirestore.instance
+        .collection('meals')
+        .add(mealData);
+    
+    print('✅ Succès! Document ID: ${docRef.id}');
+    
+    if (mounted) {
       setState(() {
         final existingIdx = _selectedMeals.indexWhere((m) => m.dish.name == dish.name);
         if (existingIdx >= 0) {
@@ -706,17 +609,27 @@ class _AddMealScreenState extends State<AddMealScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${dish.name} ajouté au repas'),
-          backgroundColor: AppColors.primary,
+          content: Text('✅ ${dish.name} ajouté au repas'),
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } catch (e) {
+    }
+  } catch (e) {
+    print('❌ Erreur Firebase: $e');
+    print('❌ Type d\'erreur: ${e.runtimeType}');
+    
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text('❌ Erreur: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
       );
     }
   }
+}
 
   void _prev() {
     if (_scannedApiDish != null) {
@@ -748,7 +661,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
       backgroundColor: AppColors.bg,
       body: Column(
         children: [
-          // ── HEADER ──
+          // ── HEADER (MODIFIÉ : TITRE SUPPRIMÉ) ──
           Container(
             color: AppColors.white,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -757,7 +670,9 @@ class _AddMealScreenState extends State<AddMealScreen> {
               child: Column(
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Bouton retour
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: Container(
@@ -766,13 +681,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                           child: const Icon(Icons.arrow_back_ios_new, color: AppColors.textDark, size: 18),
                         ),
                       ),
-                      const Expanded(
-                        child: Text(
-                          'Ajouter un repas',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textDark),
-                        ),
-                      ),
+                      // Bouton d'hydratation à droite (sans titre)
                       GestureDetector(
                         onTap: _showHydrationModal,
                         child: Container(
@@ -788,6 +697,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                   ),
                   const SizedBox(height: 16),
                   
+                  // Barre de recherche
                   Row(
                     children: [
                       Expanded(
@@ -810,13 +720,19 @@ class _AddMealScreenState extends State<AddMealScreen> {
                       ),
                       const SizedBox(width: 12),
                       GestureDetector(
-                        onTap: () {
-                          _scanBarcodeOnlyApi('3017620422003'); 
-                        },
+                        onTap: _scanBarcodeOnlyApi,
                         child: Container(
-                          width: 48, height: 48,
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
-                          child: const Icon(Icons.qr_code_scanner, color: AppColors.white, size: 22),
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.qr_code_scanner,
+                            color: AppColors.white,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ],
@@ -1103,4 +1019,107 @@ class _MacroCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BarcodeScannerWidget extends StatefulWidget {
+  final Function(String) onBarcodeScanned;
+
+  const _BarcodeScannerWidget({
+    required this.onBarcodeScanned,
+  });
+
+  @override
+  State<_BarcodeScannerWidget> createState() =>
+      _BarcodeScannerWidgetState();
+}
+
+class _BarcodeScannerWidgetState
+    extends State<_BarcodeScannerWidget> {
+  final MobileScannerController _controller =
+      MobileScannerController();
+
+  bool _isProcessing = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Scanner un produit'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flash_on),
+            onPressed: () => _controller.toggleTorch(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: (capture) {
+              if (_isProcessing) return;
+
+              for (final barcode in capture.barcodes) {
+                if (barcode.rawValue != null) {
+                  _isProcessing = true;
+                  widget.onBarcodeScanned(
+                    barcode.rawValue!,
+                  );
+                  return;
+                }
+              }
+            },
+          ),
+
+          Center(
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+
+          Positioned(
+            bottom: 50,
+            left: 20,
+            right: 20,
+            child: Text(
+              'Placez le code-barres dans le cadre',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
 }

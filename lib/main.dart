@@ -18,7 +18,6 @@ import 'screens/securite_screen.dart';
 // ✅ Nouveaux screens
 import 'screens/sport_screen.dart';
 import 'screens/glycemie_screen.dart';
-import 'screens/hydratation_screen.dart';
 import 'screens/historique_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -101,7 +100,7 @@ class CalmSugarApp extends StatelessWidget {
         '/securite':         (_) => const SecuriteScreen(),
         '/sport':            (_) => const SportScreen(),
         '/glycemie':         (_) => const GlycemieScreen(),
-        '/hydratation':      (_) => const HydratationScreen(),
+        //'/hydratation':      (_) => const HydratationScreen(),
        // '/historique':       (_) => const HistoriqueScreen(),
       },
     );
