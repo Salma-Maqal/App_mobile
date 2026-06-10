@@ -18,7 +18,7 @@ import 'screens/securite_screen.dart';
 // ✅ Nouveaux screens
 import 'screens/sport_screen.dart';
 import 'screens/glycemie_screen.dart';
-import 'screens/historique_screen.dart';
+import 'screens/history_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart'; // <--- N'oublie pas d'ajouter le package
 import 'user_session.dart';
+import 'package:intl/date_symbol_data_local.dart';
 // ... tes autres imports ...
 
 void main() async {
@@ -34,7 +35,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await UserSession().load();
-  
+  await initializeDateFormatting('fr_FR', null);
+
   // Configuration propre de la barre d'état
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -101,7 +103,7 @@ class CalmSugarApp extends StatelessWidget {
         '/sport':            (_) => const SportScreen(),
         '/glycemie':         (_) => const GlycemieScreen(),
         //'/hydratation':      (_) => const HydratationScreen(),
-       // '/historique':       (_) => const HistoriqueScreen(),
+        '/historique':       (_) => const HistoryScreen(),
       },
     );
   }

@@ -10,14 +10,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   cupertino_icons: ^1.0.8
-
+  health: ^13.3.1
   firebase_core: ^3.15.0
   firebase_auth: ^5.1.0
   cloud_firestore: ^5.6.12
 
   fl_chart: ^0.69.2
+  intl: ^0.20.0
   google_fonts: ^6.3.3
   google_nav_bar: ^5.0.7
 
@@ -36,3 +36,16 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  assets:
+    - assets/images/boissons/
+    - assets/images/breakfast/
+    - assets/images/dinner/
+    - assets/images/dessert/
+    - assets/images/snacks/
+    - assets/images/healthy/
+    - assets/images/poisson/
+    - assets/images/salade/
+    - assets/images/soupe/
+    - assets/images/viande/
+    - assets/typeRepas/

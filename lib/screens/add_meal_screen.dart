@@ -3,10 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '/diabetes_analyzer.dart';
-import '../app_colors.dart';
-import '../screens/hydratation_model.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../app_colors.dart';
 
 // ──────────────────────────────────────────────
 // MODÈLE PLAT
@@ -73,7 +71,6 @@ class _MealItem {
 // DONNÉES DES PLATS
 // ──────────────────────────────────────────────
 const _dishes = [
-  // ==================== SALADES ====================
   _Dish(
     emoji:'🥗', name:'Salade César',
     desc:'Laitue romaine, poulet, parmesan, sauce César',
@@ -109,8 +106,6 @@ const _dishes = [
     cal:320, gluc:10, glucPct:12, prot:18, protPct:22, lip:24, lipPct:66,
     category:'Salades', imageUrl:'assets/images/salade/salade_crevette.jpg', glycemicIndex:25,
   ),
-
-  // ==================== SOUPES ====================
   _Dish(
     emoji:'🍲', name:'Harira',
     desc:'Soupe marocaine aux tomates, lentilles et pois chiches',
@@ -118,43 +113,6 @@ const _dishes = [
     cal:310, gluc:40, glucPct:52, prot:18, protPct:23, lip:9, lipPct:25,
     category:'Soupes', imageUrl:'assets/images/soupe/harira.jpg', glycemicIndex:45,
   ),
-  _Dish(
-    emoji:'🥔', name:'Velouté de Potiron',
-    desc:'Potiron, crème, graines de courge',
-    prep:'30 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:160, gluc:22, glucPct:55, prot:4, protPct:10, lip:6, lipPct:35,
-    category:'Soupes', imageUrl:'assets/images/soupe/Potiron.jpg', glycemicIndex:65,
-  ),
-  _Dish(
-    emoji:'🥕', name:'Soupe de Légumes',
-    desc:'Carottes, poireaux, pommes de terre, céleri',
-    prep:'25 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:120, gluc:18, glucPct:60, prot:4, protPct:13, lip:3, lipPct:27,
-    category:'Soupes', imageUrl:'assets/images/soupe/legume.jpg', glycemicIndex:50,
-  ),
-  _Dish(
-    emoji:'🍗', name:'Chorba Poulet',
-    desc:'Soupe algérienne au poulet, vermicelles et pois chiches',
-    prep:'45 Min', level:'Moyen', levelColor:AppColors.sport,
-    cal:280, gluc:35, glucPct:50, prot:20, protPct:28, lip:8, lipPct:22,
-    category:'Soupes', imageUrl:'assets/images/soupe/Poulet.jpg', glycemicIndex:55,
-  ),
-  _Dish(
-    emoji:'🫘', name:'Soupe Lentilles',
-    desc:'Lentilles corail, carottes, oignons, cumin',
-    prep:'35 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:190, gluc:28, glucPct:59, prot:12, protPct:25, lip:3, lipPct:16,
-    category:'Soupes', imageUrl:'assets/images/soupe/lentille.jpg', glycemicIndex:40,
-  ),
-  _Dish(
-    emoji:'🥒', name:'Velouté Courgette',
-    desc:'Courgettes, pommes de terre, menthe, crème',
-    prep:'25 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:130, gluc:15, glucPct:46, prot:5, protPct:15, lip:6, lipPct:39,
-    category:'Soupes', imageUrl:'assets/images/soupe/Courgette.jpg', glycemicIndex:50,
-  ),
-
-  // ==================== VIANDE ====================
   _Dish(
     emoji:'🍗', name:'Tajine Poulet',
     desc:'Poulet, olives, citron confit',
@@ -170,44 +128,12 @@ const _dishes = [
     category:'Viande', imageUrl:'assets/images/viande/Kefta.jpg', glycemicIndex:20,
   ),
   _Dish(
-    emoji:'🍢', name:'Brochettes de Bœuf',
-    desc:'Bœuf tendre mariné, poivrons, oignons',
-    prep:'30 Min', level:'Moyen', levelColor:AppColors.sport,
-    cal:350, gluc:5, glucPct:6, prot:40, protPct:46, lip:18, lipPct:48,
-    category:'Viande', imageUrl:'assets/images/viande/Boeuf.jpg', glycemicIndex:15,
-  ),
-  _Dish(
-    emoji:'🍖', name:'Tajine Viande Pruneaux',
-    desc:'Viande d\'agneau, pruneaux, amandes',
-    prep:'90 Min', level:'Expert', levelColor:AppColors.warning,
-    cal:650, gluc:45, glucPct:28, prot:40, protPct:25, lip:38, lipPct:47,
-    category:'Viande', imageUrl:'assets/images/viande/Tajine_Viande.jpg', glycemicIndex:60,
-  ),
-
-  // ==================== POISSON ====================
-  _Dish(
     emoji:'🐟', name:'Saumon Grillé',
     desc:'Saumon frais, herbes, citron',
     prep:'20 Min', level:'Facile', levelColor:AppColors.primary,
     cal:420, gluc:2, glucPct:2, prot:40, protPct:38, lip:28, lipPct:60,
     category:'Poisson', imageUrl:'assets/images/poisson/Saumon.jpg', glycemicIndex:10,
   ),
-  _Dish(
-    emoji:'🐠', name:'Tajine Poisson',
-    desc:'Poisson, légumes, épices marocaines',
-    prep:'45 Min', level:'Moyen', levelColor:AppColors.sport,
-    cal:380, gluc:28, glucPct:30, prot:35, protPct:37, lip:14, lipPct:33,
-    category:'Poisson', imageUrl:'assets/images/poisson/Tajine_poisson.jpg', glycemicIndex:45,
-  ),
-  _Dish(
-    emoji:'🐟', name:'Sardines Farcies',
-    desc:'Sardines fraîches farcies aux herbes',
-    prep:'30 Min', level:'Moyen', levelColor:AppColors.sport,
-    cal:320, gluc:5, glucPct:6, prot:28, protPct:35, lip:20, lipPct:59,
-    category:'Poisson', imageUrl:'assets/images/poisson/Sardines.jpg', glycemicIndex:10,
-  ),
-
-  // ==================== SNACKS ====================
   _Dish(
     emoji:'🥪', name:'Sandwich Poulet',
     desc:'Poulet grillé, crudités, sauce légère',
@@ -216,96 +142,11 @@ const _dishes = [
     category:'Snacks', imageUrl:'assets/images/snacks/Sandwich_Poulet.jpg', glycemicIndex:65,
   ),
   _Dish(
-    emoji:'🥙', name:'Panini Fromage',
-    desc:'Pain panini, mozzarella, tomates, pesto',
-    prep:'10 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:480, gluc:50, glucPct:42, prot:20, protPct:17, lip:22, lipPct:41,
-    category:'Snacks', imageUrl:'assets/images/snacks/Panini_Fromage.jpg', glycemicIndex:70,
-  ),
-  _Dish(
-    emoji:'🥙', name:'Msemen',
-    desc:'Crêpe feuilletée marocaine au beurre et miel',
-    prep:'30 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:380, gluc:55, glucPct:58, prot:10, protPct:10, lip:15, lipPct:32,
-    category:'Snacks', imageUrl:'assets/images/snacks/Msemen.jpg', glycemicIndex:75,
-  ),
-  _Dish(
-    emoji:'🧆', name:'Briouates',
-    desc:'Feuilletés croustillants',
-    prep:'35 Min', level:'Moyen', levelColor:AppColors.sport,
-    cal:420, gluc:38, glucPct:36, prot:16, protPct:15, lip:22, lipPct:49,
-    category:'Snacks', imageUrl:'assets/images/snacks/Briouates.jpg', glycemicIndex:70,
-  ),
-
-  // ==================== BOISSONS ====================
-  _Dish(
-    emoji:'🥤', name:'Jus d\'Orange',
-    desc:'Jus d\'orange frais pressé',
-    prep:'5 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:110, gluc:26, glucPct:96, prot:2, protPct:4, lip:0, lipPct:0,
-    category:'Boissons', imageUrl:'assets/images/boissons/Orange.jpg', glycemicIndex:75,
-  ),
-  _Dish(
-    emoji:'🍌', name:'Smoothie Banane',
-    desc:'Banane, lait d\'amande, miel',
-    prep:'5 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:200, gluc:40, glucPct:80, prot:5, protPct:10, lip:2, lipPct:10,
-    category:'Boissons', imageUrl:'assets/images/boissons/Banane.jpg', glycemicIndex:65,
-  ),
-  _Dish(
-    emoji:'🍃', name:'Thé à la Menthe',
-    desc:'Thé vert, menthe fraîche, sucre',
-    prep:'10 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:60, gluc:15, glucPct:100, prot:0, protPct:0, lip:0, lipPct:0,
-    category:'Boissons', imageUrl:'assets/images/boissons/The.jpg', glycemicIndex:70,
-  ),
-  _Dish(
-    emoji:'☕', name:'Café Noir',
-    desc:'Café expresso',
-    prep:'5 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:5, gluc:1, glucPct:100, prot:0, protPct:0, lip:0, lipPct:0,
-    category:'Boissons', imageUrl:'assets/images/boissons/Cafe.jpg', glycemicIndex:0,
-  ),
-
-  // ==================== DESSERTS ====================
-  _Dish(
-    emoji:'🍮', name:'Sellou',
-    desc:'Pâte sucrée aux amandes, sésame',
-    prep:'20 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:520, gluc:60, glucPct:46, prot:14, protPct:11, lip:26, lipPct:43,
-    category:'Desserts', imageUrl:'assets/images/snacks/Sellou.jpg', glycemicIndex:75,
-  ),
-  _Dish(
-    emoji:'🍎', name:'Salade de Fruits',
-    desc:'Fruits de saison, jus d\'orange, menthe',
-    prep:'10 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:120, gluc:28, glucPct:93, prot:1, protPct:3, lip:1, lipPct:4,
-    category:'Desserts', imageUrl:'assets/images/dessert/salade_fruits.jpg', glycemicIndex:55,
-  ),
-  _Dish(
-    emoji:'🥞', name:'Crêpe Miel',
-    desc:'Crêpe légère, miel d\'acacia',
-    prep:'15 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:220, gluc:38, glucPct:69, prot:6, protPct:11, lip:5, lipPct:20,
-    category:'Desserts', imageUrl:'assets/images/dessert/Crepe.jpg', glycemicIndex:80,
-  ),
-
-  // ==================== HEALTHY ====================
-  _Dish(
-    emoji:'🍗', name:'Poulet Vapeur Riz',
-    desc:'Poulet vapeur, riz complet, légumes',
-    prep:'25 Min', level:'Facile', levelColor:AppColors.primary,
-    cal:480, gluc:55, glucPct:46, prot:38, protPct:32, lip:12, lipPct:22,
-    category:'Healthy', imageUrl:'assets/images/healthy/poulet_vapeur_riz.jpg', glycemicIndex:55,
-  ),
-
-  // ==================== OMELETTE ====================
-  _Dish(
     emoji:'🍳', name:'Omelette Fromage',
     desc:'Œufs, fromage râpé, ciboulette',
     prep:'10 Min', level:'Facile', levelColor:AppColors.primary,
     cal:320, gluc:2, glucPct:3, prot:22, protPct:27, lip:25, lipPct:70,
-    category:'Omlette', imageUrl:'assets/images/breakfast/Omelette_Fromage.jpg', glycemicIndex:5,
+    category:'Omelette', imageUrl:'assets/images/breakfast/Omelette_Fromage.jpg', glycemicIndex:5,
   ),
 ];
 
@@ -349,52 +190,22 @@ class _AddMealScreenState extends State<AddMealScreen> {
     final cat = _categories[_catIndex];
     return _dishes.where((d) => d.category == cat).toList();
   }
-@override
-void initState() {
-  super.initState();
-  _checkAuthStatus();
-}
 
-Future<void> _checkAuthStatus() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    print('⚠️ Aucun utilisateur connecté');
-    // Connexion anonyme automatique
-    await _signInAnonymously();
-  } else {
-    print('✅ Utilisateur connecté: ${user.uid}');
-  }
-}
-
-Future<void> _signInAnonymously() async {
-  try {
-    final userCredential = await FirebaseAuth.instance.signInAnonymously();
-    print('✅ Connexion anonyme réussie: ${userCredential.user?.uid}');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mode invité actif - vos repas seront sauvegardés'),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 2),
-        ),
-      );
+  @override
+  void initState() {
+    super.initState();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('⚠️ Aucun utilisateur connecté dans AddMealScreen');
+    } else {
+      print('✅ AddMealScreen - Utilisateur connecté: ${user.email}');
     }
-  } catch (e) {
-    print('❌ Erreur connexion anonyme: $e');
   }
-}
+
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  // ──────────────────────────────────────────────
-  // MODAL D'HYDRATATION
-  // ──────────────────────────────────────────────
-  void _showHydrationModal() {
-    HydrationModal.show(context);
   }
 
   void _onSearchChanged(String query) {
@@ -442,89 +253,88 @@ Future<void> _signInAnonymously() async {
     }
   }
 
-Future<void> _scanBarcodeOnlyApi() async {
-  String? scannedBarcode;
+  Future<void> _scanBarcodeOnlyApi() async {
+    String? scannedBarcode;
 
-  await showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (BuildContext context) {
-      return Dialog(
-        insetPadding: EdgeInsets.zero,
-        backgroundColor: Colors.black,
-        child: SizedBox(
-          width: double.infinity,
-          height: double.infinity,
-          child: _BarcodeScannerWidget(
-            onBarcodeScanned: (barcode) {
-              scannedBarcode = barcode;
-              Navigator.pop(context);
-            },
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.black,
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: _BarcodeScannerWidget(
+              onBarcodeScanned: (barcode) {
+                scannedBarcode = barcode;
+                if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+                  Navigator.of(dialogContext, rootNavigator: true).pop();
+                }
+              },
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
 
-  if (scannedBarcode == null || scannedBarcode!.isEmpty) {
-    return;
-  }
+    if (scannedBarcode == null || scannedBarcode!.isEmpty) {
+      return;
+    }
 
-  setState(() => _isApiLoading = true);
+    setState(() => _isApiLoading = true);
 
-  final url = Uri.parse(
-    'https://fr.openfoodfacts.org/api/v0/product/$scannedBarcode.json',
-  );
+    final url = Uri.parse(
+      'https://fr.openfoodfacts.org/api/v0/product/$scannedBarcode.json',
+    );
 
-  try {
-    final response = await http.get(url);
+    try {
+      final response = await http.get(url);
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
 
-      if (data['status'] == 1) {
-        final scannedProduct = _Dish.fromOpenFoodFacts(data['product']);
+        if (data['status'] == 1) {
+          final scannedProduct = _Dish.fromOpenFoodFacts(data['product']);
+          _selectProduct(scannedProduct);
 
-        _selectProduct(scannedProduct);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ ${scannedProduct.name} trouvé !'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                '❌ Code-barres non trouvé sur Open Food Facts',
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ ${scannedProduct.name} trouvé !'),
+                backgroundColor: AppColors.success,
               ),
-              backgroundColor: AppColors.warning,
-            ),
-          );
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ Code-barres non trouvé sur Open Food Facts'),
+                backgroundColor: AppColors.warning,
+              ),
+            );
+          }
         }
       }
-    }
-  } catch (e) {
-    debugPrint('Erreur Scanner API: $e');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isApiLoading = false);
+    } catch (e) {
+      debugPrint('Erreur Scanner API: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isApiLoading = false);
+      }
     }
   }
-}
+
   void _selectProduct(_Dish dish) {
     setState(() {
       _searchCtrl.clear();
@@ -542,94 +352,87 @@ Future<void> _scanBarcodeOnlyApi() async {
     });
   }
 
-Future<void> _addToMeal() async {
-  // Vérifier l'authentification
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    print('❌ Tentative d\'ajout sans utilisateur connecté');
+  Future<void> _addToMeal() async {
+    final user = FirebaseAuth.instance.currentUser;
     
-    // Essayer une connexion anonyme automatique
-    await _signInAnonymously();
-    final newUser = FirebaseAuth.instance.currentUser;
-    
-    if (newUser == null) {
+    if (user == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('❌ Impossible de sauvegarder: veuillez réessayer'),
+            content: Text('❌ Veuillez vous connecter pour ajouter des repas'),
             backgroundColor: AppColors.error,
           ),
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        });
       }
       return;
     }
-  }
-  
-  print('✅ Utilisateur connecté: ${FirebaseAuth.instance.currentUser?.uid}');
-  
-  final dish = _currentActiveDish;
-  
-  try {
-    final mealData = {
-      'userId': FirebaseAuth.instance.currentUser!.uid,
-      'name': dish.name,
-      'emoji': dish.emoji,
-      'calories': dish.cal * _portions,
-      'glucides': dish.gluc * _portions,
-      'proteines': dish.prot * _portions,
-      'lipides': dish.lip * _portions,
-      'portions': _portions,
-      'glycemicIndex': dish.glycemicIndex,
-      'timestamp': FieldValue.serverTimestamp(),
-      'imageUrl': dish.imageUrl,
-      'createdAt': DateTime.now().toIso8601String(),
-    };
     
-    print('📝 Tentative d\'ajout: ${dish.name}');
-    print('📊 Données: $mealData');
+    print('✅ Utilisateur connecté: ${user.email}');
     
-    final docRef = await FirebaseFirestore.instance
-        .collection('meals')
-        .add(mealData);
+    final dish = _currentActiveDish;
     
-    print('✅ Succès! Document ID: ${docRef.id}');
-    
-    if (mounted) {
-      setState(() {
-        final existingIdx = _selectedMeals.indexWhere((m) => m.dish.name == dish.name);
-        if (existingIdx >= 0) {
-          final existing = _selectedMeals[existingIdx];
-          _selectedMeals[existingIdx] = _MealItem(dish: dish, portions: existing.portions + _portions);
-        } else {
-          _selectedMeals.add(_MealItem(dish: dish, portions: _portions));
-        }
+    try {
+      // Structure des données pour Firestore
+      final mealData = {
+        'userId': user.uid,
+        'userEmail': user.email,
+        'name': dish.name,
+        'mealName': dish.name,
+        'emoji': dish.emoji,
+        'calories': dish.cal * _portions,
+        'glucides': dish.gluc * _portions,
+        'proteines': dish.prot * _portions,
+        'lipides': dish.lip * _portions,
+        'portions': _portions,
+        'glycemicIndex': dish.glycemicIndex,
+        'timestamp1': Timestamp.now(),  // ← Utilisation de timestamp1
+        'imageUrl': dish.imageUrl,
+      };
+      
+      print('📝 Tentative d\'ajout: ${dish.name}');
+      print('📊 Glucides: ${dish.gluc} × $_portions = ${dish.gluc * _portions}');
+      
+      final docRef = await FirebaseFirestore.instance
+          .collection('meals')
+          .add(mealData);
+      
+      print('✅ Succès! Document ID: ${docRef.id}');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${dish.name} ajouté avec succès !'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+         setState(() {
         _portions = 1;
-        _scannedApiDish = null;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ ${dish.name} ajouté au repas'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  } catch (e) {
-    print('❌ Erreur Firebase: $e');
-    print('❌ Type d\'erreur: ${e.runtimeType}');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Erreur: ${e.toString()}'),
-          backgroundColor: AppColors.error,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+        _searchCtrl.clear();
+        _localSearchResults = [];
+        _apiSearchResults = [];
+        _scannedApiDish = null;});
+        // Navigator.pop(context, true);
+      }
+    } catch (e) {
+      print('❌ Erreur Firebase: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Erreur: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
-}
 
   void _prev() {
     if (_scannedApiDish != null) {
@@ -661,7 +464,6 @@ Future<void> _addToMeal() async {
       backgroundColor: AppColors.bg,
       body: Column(
         children: [
-          // ── HEADER (MODIFIÉ : TITRE SUPPRIMÉ) ──
           Container(
             color: AppColors.white,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -672,7 +474,6 @@ Future<void> _addToMeal() async {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Bouton retour
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: Container(
@@ -681,23 +482,18 @@ Future<void> _addToMeal() async {
                           child: const Icon(Icons.arrow_back_ios_new, color: AppColors.textDark, size: 18),
                         ),
                       ),
-                      // Bouton d'hydratation à droite (sans titre)
-                      GestureDetector(
-                        onTap: _showHydrationModal,
-                        child: Container(
-                          width: 40, height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.water.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.water_drop, color: AppColors.water, size: 22),
+                      const Text(
+                        'Ajouter un repas',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark,
                         ),
                       ),
+                      const SizedBox(width: 40),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Barre de recherche
                   Row(
                     children: [
                       Expanded(
@@ -741,8 +537,6 @@ Future<void> _addToMeal() async {
               ),
             ),
           ),
-
-          // ── HORIZONTAL CATEGORIES SLIDER ──
           if (_searchCtrl.text.isEmpty && _scannedApiDish == null)
             Container(
               color: AppColors.white,
@@ -779,8 +573,6 @@ Future<void> _addToMeal() async {
                 },
               ),
             ),
-
-          // ── EXPANDED VIEW ──
           Expanded(
             child: _searchCtrl.text.isNotEmpty 
                 ? _buildCombinedSearchView() 
@@ -803,7 +595,6 @@ Future<void> _addToMeal() async {
           ..._localSearchResults.map((dish) => _buildSearchRow(dish)),
           const SizedBox(height: 20),
         ],
-
         if (_apiSearchResults.isNotEmpty || _isApiLoading) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 10),
@@ -816,7 +607,6 @@ Future<void> _addToMeal() async {
           ),
           ..._apiSearchResults.map((dish) => _buildSearchRow(dish)),
         ],
-
         if (_localSearchResults.isEmpty && _apiSearchResults.isEmpty && !_isApiLoading)
           Center(child: Padding(padding: const EdgeInsets.only(top: 40), child: Text("Aucun produit trouvé", style: TextStyle(color: AppColors.textGrey)))),
       ],
@@ -902,9 +692,9 @@ Future<void> _addToMeal() async {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: DiabetesAnalyzer.riskColor(dish.glycemicIndex).withOpacity(0.08),
+                      color: _getRiskColor(dish.glycemicIndex).withOpacity(0.08),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: DiabetesAnalyzer.riskColor(dish.glycemicIndex).withOpacity(0.2)),
+                      border: Border.all(color: _getRiskColor(dish.glycemicIndex).withOpacity(0.2)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,9 +702,9 @@ Future<void> _addToMeal() async {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('${dish.glycemicIndex}', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, height: 1, color: DiabetesAnalyzer.riskColor(dish.glycemicIndex))),
+                            Text('${dish.glycemicIndex}', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, height: 1, color: _getRiskColor(dish.glycemicIndex))),
                             const SizedBox(width: 8),
-                            Expanded(child: Text('Indice Glycémique (IG)\nRisque ${DiabetesAnalyzer.riskLevel(dish.glycemicIndex).toLowerCase()}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark, height: 1.2))),
+                            Expanded(child: Text('Indice Glycémique (IG)\nRisque ${_getRiskLevel(dish.glycemicIndex)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark, height: 1.2))),
                           ],
                         ),
                       ],
@@ -973,11 +763,20 @@ Future<void> _addToMeal() async {
       ],
     );
   }
+
+  Color _getRiskColor(int glycemicIndex) {
+    if (glycemicIndex <= 55) return AppColors.success;
+    if (glycemicIndex <= 70) return AppColors.warning;
+    return AppColors.error;
+  }
+
+  String _getRiskLevel(int glycemicIndex) {
+    if (glycemicIndex <= 55) return 'Faible';
+    if (glycemicIndex <= 70) return 'Modéré';
+    return 'Élevé';
+  }
 }
 
-// ──────────────────────────────────────────────
-// COMPOSANTS AUXILIAIRES
-// ──────────────────────────────────────────────
 class _Badge extends StatelessWidget {
   final String icon, text;
   final Color? color;
@@ -1023,21 +822,14 @@ class _MacroCard extends StatelessWidget {
 
 class _BarcodeScannerWidget extends StatefulWidget {
   final Function(String) onBarcodeScanned;
-
-  const _BarcodeScannerWidget({
-    required this.onBarcodeScanned,
-  });
+  const _BarcodeScannerWidget({required this.onBarcodeScanned});
 
   @override
-  State<_BarcodeScannerWidget> createState() =>
-      _BarcodeScannerWidgetState();
+  State<_BarcodeScannerWidget> createState() => _BarcodeScannerWidgetState();
 }
 
-class _BarcodeScannerWidgetState
-    extends State<_BarcodeScannerWidget> {
-  final MobileScannerController _controller =
-      MobileScannerController();
-
+class _BarcodeScannerWidgetState extends State<_BarcodeScannerWidget> {
+  final MobileScannerController _controller = MobileScannerController();
   bool _isProcessing = false;
 
   @override
@@ -1057,7 +849,11 @@ class _BarcodeScannerWidgetState
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
         ),
         actions: [
           IconButton(
@@ -1076,33 +872,25 @@ class _BarcodeScannerWidgetState
             controller: _controller,
             onDetect: (capture) {
               if (_isProcessing) return;
-
               for (final barcode in capture.barcodes) {
                 if (barcode.rawValue != null) {
                   _isProcessing = true;
-                  widget.onBarcodeScanned(
-                    barcode.rawValue!,
-                  );
+                  widget.onBarcodeScanned(barcode.rawValue!);
                   return;
                 }
               }
             },
           ),
-
           Center(
             child: Container(
               width: 280,
               height: 280,
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.white,
-                  width: 2,
-                ),
+                border: Border.all(color: Colors.white, width: 2),
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
           ),
-
           Positioned(
             bottom: 50,
             left: 20,
@@ -1110,7 +898,7 @@ class _BarcodeScannerWidgetState
             child: Text(
               'Placez le code-barres dans le cadre',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -1121,5 +909,4 @@ class _BarcodeScannerWidgetState
       ),
     );
   }
-  
 }
