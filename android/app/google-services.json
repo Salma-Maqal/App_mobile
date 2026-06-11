@@ -40,6 +40,42 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:788634630767:android:ae7652e8a53e35a325ab9a",
+        "android_client_info": {
+          "package_name": "com.example.nutrition_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "788634630767-vcdmi4ufopbmcghjvl9onm7phaqpfhaq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4zBu3o89XrJtdZZrNLkJCJGoogomGDHc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "788634630767-vcdmi4ufopbmcghjvl9onm7phaqpfhaq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "788634630767-pqqonuuvojeafk20to29k48fpna9gudk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.diabeteApp1"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

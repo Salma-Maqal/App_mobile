@@ -11,20 +11,23 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  health: ^13.3.1
+  health: 13.3.1
+  permission_handler: ^11.0.0
+  pedometer: ^4.2.0
+  percent_indicator: ^4.2.3
   firebase_core: ^3.15.0
   firebase_auth: ^5.1.0
   cloud_firestore: ^5.6.12
 
   fl_chart: ^0.69.2
-  intl: ^0.20.0
+  intl: 0.20.2
   google_fonts: ^6.3.3
   google_nav_bar: ^5.0.7
 
   shared_preferences: ^2.5.5
   http: ^1.6.0
   image_picker: ^1.2.2
-  table_calendar: ^3.2.0
+  table_calendar: 3.2.0
 
   flutter_local_notifications: ^17.2.4
   mobile_scanner: ^7.2.0

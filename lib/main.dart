@@ -1,4 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+import 'firebase_options.dart';
 import 'user_session.dart';
 import 'screens/splash_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -15,19 +22,9 @@ import 'screens/nutrition_screen.dart';
 import 'screens/Mon_Profil_screen.dart';
 import 'screens/Nutification_screen.dart';
 import 'screens/securite_screen.dart';
-// ✅ Nouveaux screens
 import 'screens/sport_screen.dart';
 import 'screens/glycemie_screen.dart';
 import 'screens/history_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart'; // <--- N'oublie pas d'ajouter le package
-import 'user_session.dart';
-import 'package:intl/date_symbol_data_local.dart';
-// ... tes autres imports ...
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +34,6 @@ void main() async {
   await UserSession().load();
   await initializeDateFormatting('fr_FR', null);
 
-  // Configuration propre de la barre d'état
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -53,7 +49,6 @@ class CalmSugarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Définition d'une palette de couleurs cohérente
     final colorScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF2D531A),
       primary: const Color(0xFF2D531A),
@@ -68,13 +63,9 @@ class CalmSugarApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: colorScheme,
         scaffoldBackgroundColor: const Color(0xFFF0F7E8),
-        
-        // Application de la police professionnelle sur toute l'app
         textTheme: GoogleFonts.plusJakartaSansTextTheme(
           Theme.of(context).textTheme,
         ),
-        
-        // Style global des boutons pour un look plus pro
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             elevation: 0,
@@ -83,27 +74,29 @@ class CalmSugarApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/',
+      
+      // HNA L-HAL: Diri '/sport' hna bach t-t-st-i direct
+      initialRoute: '/sport', 
+      
       routes: {
-        '/':                 (_) => const SplashScreen(),
-        '/welcome':          (_) => const WelcomeScreen(),
-        '/login':            (_) => const LoginScreen(),
-        '/signup':           (_) => const SignUpScreen(),
-        '/health-info':      (_) => const HealthInfoScreen(),
-        '/companion-info':   (_) => const CompanionInfoScreen(),
-        '/dashboard':        (_) => const DashboardScreen(),
-        '/add-companion':    (_) => const AddCompanionScreen(),
-        '/verify':           (_) => const VerifyScreen(),
-        '/forgot-password':  (_) => const ForgotPasswordScreen(),
-        '/add-meal':         (_) => const AddMealScreen(),
-        '/nutrition':        (_) => const NutritionScreen(),
-        '/profile':          (_) => const MonProfilScreen(),
-        '/notifications':    (_) => const NotificationsScreen(),
-        '/securite':         (_) => const SecuriteScreen(),
-        '/sport':            (_) => const SportScreen(),
-        '/glycemie':         (_) => const GlycemieScreen(),
-        //'/hydratation':      (_) => const HydratationScreen(),
-        '/historique':       (_) => const HistoryScreen(),
+        '/': (_) => const SplashScreen(),
+        '/welcome': (_) => const WelcomeScreen(),
+        '/login': (_) => const LoginScreen(),
+        '/signup': (_) => const SignUpScreen(),
+        '/health-info': (_) => const HealthInfoScreen(),
+        '/companion-info': (_) => const CompanionInfoScreen(),
+        '/dashboard': (_) => const DashboardScreen(),
+        '/add-companion': (_) => const AddCompanionScreen(),
+        '/verify': (_) => const VerifyScreen(),
+        '/forgot-password': (_) => const ForgotPasswordScreen(),
+        '/add-meal': (_) => const AddMealScreen(),
+        '/nutrition': (_) => const NutritionScreen(),
+        '/profile': (_) => const MonProfilScreen(),
+        '/notifications': (_) => const NotificationsScreen(),
+        '/securite': (_) => const SecuriteScreen(),
+        '/sport': (_) => const SportScreen(),
+        '/glycemie': (_) => const GlycemieScreen(),
+        '/historique': (_) => const HistoryScreen(),
       },
     );
   }
